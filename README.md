@@ -21,32 +21,32 @@ ros2 launch sac_driver sac_driver.launch.py
 ## Architecture
 
 ```
-                     JOYSTICK (Xbox-style gamepad)
-                        |
-                        v
-┌─────────────────────────────────────────────────┐
-│              joy_mode_manager                    │
-│  LB (btn 4) → manual mode (gates teleop)        │
-│  RB (btn 5) → autonomy mode (unlocks /drive)    │
-│  Publishes /autonomy_lock at 50Hz               │
-└───────────┬───────────────────┬─────────────────┘
-            |                   |
-    /teleop_gated          /autonomy_lock
-    (priority 100)         (Bool: True=locked)
-            |                   |
-            v                   v
-┌─────────────────────────────────────────────────┐
-│              ackermann_mux (C++)                 │
-│  Joystick channel: /teleop_gated (priority 100)  │
-│  AI channel:       /drive        (priority 10)    │
-│  Lock: /autonomy_lock blocks AI channel           │
-│  Output: /ackermann_cmd → VESC motor controller   │
-└─────────────────────────────────────────────────┘
-            ^                   ^
-    /teleop_gated              /drive
-            |                   |
-     joy_teleop           sac_driver_node
-     (manual)             (AI autonomous)
+                  JOYSTICK (Xbox-style gamepad)
+                             |
+                             v
+┌───────────────────────────────────────────────────┐
+│                 joy_mode_manager                   │
+│  LB (btn 4) → manual mode (gates teleop)          │
+│  RB (btn 5) → autonomy mode (unlocks /drive)      │
+│  Publishes /autonomy_lock at 50Hz                  │
+└──────────────┬────────────────────┬───────────────┘
+               |                    |
+       /teleop_gated         /autonomy_lock
+       (priority 100)        (Bool: True=locked)
+               |                    |
+               v                    v
+┌───────────────────────────────────────────────────┐
+│                ackermann_mux (C++)                 │
+│  Joystick: /teleop_gated (priority 100)            │
+│  AI:       /drive         (priority 10)            │
+│  Lock: /autonomy_lock blocks AI channel            │
+│  Output: /ackermann_cmd → VESC motor controller    │
+└───────────────┬───────────────────┬───────────────┘
+                ^                   ^
+        /teleop_gated             /drive
+                |                   |
+         joy_teleop          sac_driver_node
+         (manual)            (AI autonomous)
 ```
 
 ## SAC Driver — AI Inference Pipeline
@@ -54,16 +54,16 @@ ros2 launch sac_driver sac_driver.launch.py
 The heart of this project. A ROS2 node that runs a trained SAC neural network in real-time on the Jetson Nano.
 
 ```
-ROS2 Topics (async)          Timer (30Hz)              VESC
-┌──────────┐                ┌─────────────────┐
-│ /scan    │──→ latest_scan │                 │
-│ /odom    │──→ latest_speed│  _on_timer():   │     ┌──────────┐
-│          │──→ latest_accel│  1. LidarConv   │────→│ /drive   │
-│          │──→ latest_yaw  │  2. StateBuilder│     │(Ackermann│
-│ /servo   │──→ latest_servo│  3. NN inference│     │ Drive)   │
-│ /autonomy│──→ enabled     │  4. ControlMap  │     └──────────┘
-│  _lock   │                └─────────────────┘
-└──────────┘
+ ROS2 Topics (async)         Timer (30Hz)                VESC
+┌─────────────┐           ┌──────────────────┐     ┌────────────┐
+│ /scan       │──→ scan   │                  │     │            │
+│ /odom       │──→ speed  │  _on_timer():    │     │  /drive    │
+│             │──→ accel  │  1. LidarConv    │────→│ (Ackermann │
+│             │──→ yaw    │  2. StateBuilder │     │  Drive)    │
+│ /servo      │──→ servo  │  3. NN inference │     │            │
+│ /autonomy   │──→ enabled│  4. ControlMap   │     └────────────┘
+│  _lock      │           │                  │
+└─────────────┘           └──────────────────┘
 ```
 
 ### How It Works
