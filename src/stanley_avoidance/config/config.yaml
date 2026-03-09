@@ -1,0 +1,34 @@
+stanley_avoidance:
+  ros__parameters:
+    waypoints_path: "/home/laptop/ros2_ws/src/stanley_avoidance/racelines/K_02csv"
+    waypoints_path_2nd: "/home/laptop/ros2_ws/src/stanley_avoidance/racelines/K_02.csv"
+    scan_topic: "/scan"
+    scan_yaw_offset_deg: -230.0
+    scan_range_offset_m: -0.6
+    odom_topic: "/pf/pose/odom"
+    drive_topic: "/drive"
+    interpolation_distance: 0.05
+    velocity_percentage: 0.7
+
+    lane_number: 1
+
+    K_p: 0.15
+    K_p_obstacle: 1.8
+    K_E: 1.8
+    K_H: 1.1
+
+    min_lookahead: 0.8 # for larger track
+    max_lookahead: 3.0 # lookahead when the car is going around max velocity
+    min_lookahead_speed: 3.0
+    max_lookahead_speed: 3.0 # approximately the max velocity
+
+    # For when there is an obstacle
+    velocity_min: 1.0
+    velocity_max: 2.0
+    steering_limit: 20.0
+    cells_per_meter: 20
+    avoidance_margin_m: 0.10
+
+waypoint_visualizer_node:
+  ros__parameters:
+    waypoints_path: "/home/laptop/ros2_ws/src/stanley_avoidance/racelines/K_02.csv"

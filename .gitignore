@@ -1,0 +1,50 @@
+# Build artifacts
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+*.eggs/
+
+# ML / Training
+runs/
+*.pth
+*.bin
+*.onnx
+checkpoints/
+wandb/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+*.log
+
+# ROS2 generated
+colcon.meta
+
+# NFS shared (mounted at runtime)
+# shared/
+
+# Compiled C++ artifacts in source
+src/*/build/
+
+# Local dev files
+.claude/
+LLM_migracja/
+local_python/
+frames.pdf

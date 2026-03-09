@@ -1,0 +1,24 @@
+pure_pursuit:
+  ros__parameters:
+    waypoints_path: "/home/laptop/ros2_ws/src/pure_pursuit/racelines/K_02.csv"
+    odom_topic: "/pf/pose/odom"
+    car_refFrame: "base_link"
+    global_refFrame: "map"
+    drive_topic: "/drive"
+    rviz_current_waypoint_topic: "/current_waypoint"
+    rviz_lookahead_waypoint_topic: "/lookahead_waypoint"
+
+    # Pure Pursuit Parameters
+    # Lookahead is computed using the following: lookahead = min(max(min_lookahead, max_lookahead * curr_velocity / lookahead_ratio), max_lookahead);
+    # min_lookahead: 0.5 # for square track
+    min_lookahead: 0.3 # Im mniej tym bardziej się lini trzyma
+    max_lookahead: 2.0 # lookahead when the car is going around max velocity
+    lookahead_ratio: 3.0 # approximately the max velocity
+    # K_p: 0.25 # for square track
+    K_p: 0.45 # Im mniej tym mniej koryguje
+    steering_limit: 20.0
+    velocity_percentage: 0.75 # the limit, can only do 1 lap with clean tires
+
+waypoint_visualizer_node:
+  ros__parameters:
+    waypoints_path: "/home/laptop/ros2_ws/src/pure_pursuit/racelines/K_02.csv"

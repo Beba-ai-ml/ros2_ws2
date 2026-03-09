@@ -1,0 +1,9 @@
+/joy_mode_manager:
+  ros__parameters:
+    autonomy_button: 5
+    autonomy_lock_topic: autonomy_lock
+    lock_publish_rate: 50.0
+    manual_button: 4
+    teleop_in: teleop
+    teleop_out: teleop_gated
+    use_sim_time: false
