@@ -29,9 +29,12 @@ class LidarConverter:
     use_interpolation: bool = True
 
     def _to_scan_angle_rad(self, target_angle_deg: float) -> float:
-        # Convert target angle into scan frame with optional offset and direction.
+        # Convert target angle into scan frame with optional offset and direction,
+        # then wrap to [-pi, pi) so rear-hemisphere angles map into RPLiDAR range.
         angle_deg = self.angle_direction * (float(target_angle_deg) + float(self.angle_offset_deg))
-        return math.radians(angle_deg)
+        angle_rad = math.radians(angle_deg)
+        angle_rad = ((angle_rad + math.pi) % (2.0 * math.pi)) - math.pi
+        return angle_rad
 
     def convert(self, scan_msg: object) -> np.ndarray:
         angle_min = float(_get_attr(scan_msg, "angle_min"))
@@ -80,4 +83,22 @@ class LidarConverter:
         return np.clip(out, 0.0, 1.0)
 
 
-__all__ = ["LidarConverter"]
+def build_lidar_angles(front_step_deg: float = 0.5, rear_step_deg: float = 2.0) -> list:
+    """Generate variable-resolution lidar angles matching training env.
+
+    Front hemisphere (0-180 deg): front_step resolution.
+    Rear hemisphere (180-360 deg): rear_step resolution.
+    """
+    angles = []
+    a = 0.0
+    while a <= 180.0 + 1e-9:
+        angles.append(round(a, 4))
+        a += front_step_deg
+    a = 180.0 + rear_step_deg
+    while a < 360.0 - 1e-9:
+        angles.append(round(a, 4))
+        a += rear_step_deg
+    return angles
+
+
+__all__ = ["LidarConverter", "build_lidar_angles"]

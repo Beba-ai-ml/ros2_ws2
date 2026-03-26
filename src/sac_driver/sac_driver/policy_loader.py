@@ -3,11 +3,23 @@
 from __future__ import annotations
 
 import logging
+import sys as _sys
 from pathlib import Path
 from typing import Iterable, Tuple
 
 import numpy as np
 import torch
+
+# Fix numpy version mismatch: PC saves checkpoints with numpy>=2.0 (numpy._core),
+# Jetson has numpy<2.0 (numpy.core). Add aliases so torch.load succeeds.
+if 'numpy._core' not in _sys.modules:
+    import numpy.core as _nc
+    _sys.modules['numpy._core'] = _nc
+    try:
+        import numpy.core.multiarray as _ncm
+        _sys.modules['numpy._core.multiarray'] = _ncm
+    except ImportError:
+        pass
 import torch.nn as nn
 
 LOG_STD_MIN = -20.0

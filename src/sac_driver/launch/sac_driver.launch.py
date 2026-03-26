@@ -18,7 +18,7 @@ def _default_paths():
         return "", ""
     pkg_share = get_package_share_directory("sac_driver")
     params = os.path.join(pkg_share, "config", "driver_params.yaml")
-    model = "/home/laptop/shared/różne/best_mapa1_ep18000_clean.pth"
+    model = "/home/laptop/shared/różne/session_car_1_3.pth"
     return params, model
 
 

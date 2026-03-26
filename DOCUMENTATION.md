@@ -58,44 +58,44 @@ The central orchestrator. Subscribes to sensor topics, runs the inference pipeli
 
 ### `lidar_converter.py` — Lidar Angle Extraction
 
-Extracts 27 specific angles from the full lidar scan.
+Extracts target angles from the full lidar scan with angle wrapping to [-pi, pi).
 
 | Element | Description |
 |---------|-------------|
 | `class LidarConverter` | Stateless converter, initialized with angle list and offset |
-| `__init__(angles_deg, offset_deg, max_range)` | Sets up target angles (default: 27 rays), frame offset (-90deg), max range (20m) |
-| `convert(ranges, angle_min, angle_increment)` | Returns list of 27 normalized distances [0,1]. Uses interpolation between adjacent scan indices. |
+| `__init__(angles_deg, offset_deg, max_range)` | Sets up target angles, frame offset (-90deg), max range (20m) |
+| `convert(scan_msg)` | Returns array of normalized distances [0,1]. Uses interpolation between adjacent scan indices. |
+| `build_lidar_angles(front_step, rear_step)` | Generates variable-resolution angles: front hemisphere (0-180°) at front_step, rear (180-360°) at rear_step |
 
-**Default angles (degrees):**
-```
-[-15, 0, 15, 30, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90,
- 95, 100, 105, 110, 115, 120, 125, 130, 135, 150, 165, 180, 195]
-```
+**Current config: 450 rays** via `build_lidar_angles(0.5, 2.0)`:
+- Front hemisphere (0-180°): 361 rays at 0.5° step
+- Rear hemisphere (182-358°): 89 rays at 2.0° step
 
 ---
 
 ### `state_builder.py` — Observation Vector Builder
 
-Builds the 128-float state vector from sensor data.
+Builds the 1820-float state vector from sensor data.
 
 | Element | Description |
 |---------|-------------|
 | `class StateBuilder` | Maintains a deque of 4 frames |
-| `__init__(stack_frames, max_speed, ...)` | Configures normalization parameters |
-| `build_frame(lidar_27, collision, speed, servo, accel, yaw)` | Creates one 32-float frame with normalized values |
-| `get_state()` | Returns flattened 128-float array (4 frames x 32 floats) |
-| `reset()` | Clears the frame deque |
+| `__init__(stack_frames, lidar_dim, max_speed, ...)` | Configures normalization parameters |
+| `update(lidar, speed, steer, accel_fb, accel, yaw)` | Creates one 455-float frame, appends to stack, returns concatenated state |
+| `reset(first_obs)` | Clears deque and fills with first_obs |
+| `single_obs_dim` | Property: lidar_dim + 5 = 455 |
+| `state_dim` | Property: 455 x 4 = 1820 |
 
-**Frame structure (32 floats):**
+**Frame structure (455 floats):**
 
 | Index | Feature | Normalization |
 |-------|---------|---------------|
-| 0-26 | 27 lidar distances | distance / 20.0, clipped [0,1] |
-| 27 | Collision flag | 0.0 (no sensor) |
-| 28 | Speed | abs(speed) / max_speed, [0,1] |
-| 29 | Servo position | (servo + offset) / divisor, [0,1] |
-| 30 | Linear acceleration | accel / 4.0, clamped [-1,1] |
-| 31 | Angular velocity | yaw / 3.0, clamped [-1,1] |
+| 0-449 | 450 lidar distances | distance / 20.0, clipped [0,1] |
+| 450 | Speed | abs(speed) / max_speed, [0,1] |
+| 451 | Steering | servo centered, [-1,1] |
+| 452 | Accel feedback | previous NN accel (raw), [-1,1] |
+| 453 | Linear acceleration | accel / max_accel, clamped [-1,1] |
+| 454 | Angular velocity | yaw / max_yaw_rate, clamped [-1,1] |
 
 ---
 
@@ -105,7 +105,7 @@ Builds the 128-float state vector from sensor data.
 |---------|-------------|
 | `class InferenceEngine` | Wraps a GaussianPolicy model |
 | `__init__(model, device)` | Takes a loaded PyTorch model |
-| `infer(state_vector)` | Input: 128 floats. Output: (steer, accel) tuple, each in [-1,1]. Runs `torch.no_grad()`. |
+| `get_action(state_vector)` | Input: 1820 floats. Output: (steer, accel) tuple. Steer in [-1,1], accel in [0,2]. Runs `torch.no_grad()`. ~5ms on Jetson CPU. |
 
 ---
 
@@ -113,7 +113,7 @@ Builds the 128-float state vector from sensor data.
 
 | Element | Description |
 |---------|-------------|
-| `load_policy(checkpoint_path, device, weights_only)` | Loads .pth file, auto-detects state_dim, action_dim, hidden_sizes from weight shapes. Handles `torch.compile` `_orig_mod.` prefix stripping. Returns (GaussianPolicy, state_dim, action_dim). |
+| `load_policy(checkpoint_path, device, weights_only)` | Loads .pth file, auto-detects state_dim, action_dim, hidden_sizes from weight shapes. Handles `torch.compile` prefix stripping. Includes numpy._core compat fix for PC→Jetson loading. Returns GaussianPolicy in eval mode. |
 
 **Auto-detection logic:**
 - `state_dim` ← `backbone.0.weight.shape[1]`
@@ -145,17 +145,19 @@ Builds the 128-float state vector from sensor data.
 | `model.path` | string | — | Path to .pth weights file |
 | `model.device` | string | `"cpu"` | PyTorch device |
 | `model.weights_only` | bool | `false` | torch.load weights_only flag |
-| `lidar.angles_deg` | float[] | 27 angles | Target lidar angles |
-| `lidar.offset_deg` | float | `-90.0` | Lidar frame offset |
+| `lidar.front_step_deg` | float | `0.5` | Front hemisphere angular step (0 = use angles_deg list) |
+| `lidar.rear_step_deg` | float | `2.0` | Rear hemisphere angular step (0 = use angles_deg list) |
+| `lidar.angles_deg` | float[] | 27 angles | Explicit target angles (overridden when front/rear step > 0) |
+| `lidar.angle_offset_deg` | float | `-90.0` | Lidar frame offset |
 | `lidar.max_range_m` | float | `20.0` | Max lidar range for normalization |
-| `lidar.interpolate` | bool | `true` | Interpolate between scan indices |
+| `lidar.use_interpolation` | bool | `true` | Interpolate between scan indices |
 | `state.stack_frames` | int | `4` | Number of frames to stack |
-| `state.max_speed_mps` | float | `8.0` | Speed normalization divisor |
+| `state.max_speed_mps` | float | `6.0` | Speed normalization divisor |
 | `state.max_accel_mps2` | float | `4.0` | Acceleration normalization divisor |
 | `state.max_yaw_rate_rad_s` | float | `3.0` | Yaw rate normalization divisor |
-| `state.servo_norm_divisor` | float | `0.9` | Servo normalization divisor |
-| `state.servo_norm_offset` | float | `-0.05` | Servo normalization offset |
-| `state.servo_default` | float | `0.535` | Default servo value (center) |
+| `state.servo_norm_divisor` | float | `0.435` | Servo normalization divisor (for [-1,1] centered) |
+| `state.servo_norm_offset` | float | `-0.535` | Servo normalization offset |
+| `state.servo_default` | float | `0.0` | Default servo value (0 = center in [-1,1]) |
 | `control.rate_hz` | float | `30.0` | Control loop frequency |
 | `control.enable_on_start` | bool | `false` | Auto-enable on node start |
 | `control.speed_sign` | float | `-1.0` | Speed direction flip |
@@ -225,7 +227,7 @@ Launches the full hardware stack:
 | `ProcessCard` | Card combining LED + label + toggle for one process |
 | `ROS2Panel` | Main window. 2x3 grid of process cards + debug console. Polls ProcessManager at 1Hz for status, 500ms for logs |
 
-**Managed processes:** SETUP, Bringup, SLAM, Localize, Pursuit, Stanley
+**Managed processes:** SETUP, Bringup, SLAM, AI Inference, Localize, Pursuit, Stanley
 
 ### `process_manager.py` — Process Lifecycle Manager
 

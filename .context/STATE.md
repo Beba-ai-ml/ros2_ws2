@@ -2,20 +2,51 @@
 
 ## What Works
 - Full inference pipeline: lidar → state → NN → VESC commands — **TESTED ON REAL CAR, IT DRIVES**
-- 27-angle lidar extraction with -90deg offset and interpolation
-- 4-frame stacking (128-float state vector: 32 x 4 frames)
+- **New model `session_car_1_3.pth`** — 450-ray variable-resolution lidar, 1820-dim state, hidden [512,512,256]
+- 450-angle lidar extraction with variable step (0.5° front, 2.0° rear) and -90deg offset
+- 4-frame stacking (1820-float state vector: 455 x 4 frames)
+- Observation: [450 lidar, speed_norm, steer_norm, accel_feedback, linear_accel, angular_vel] per frame
 - Deadman switch via `/autonomy_lock` topic (hold RB to drive, release to stop)
 - Safe mode with speed/steer/accel scaling
 - Rate limiting on steering and acceleration
 - Auto-detection of model architecture from .pth weights
-- Model `best_mapa1_ep18000_clean.pth` loads successfully (state_dim=128, action_dim=2, hidden=[256,256,256])
+- Numpy compatibility fix for PC→Jetson checkpoint loading (numpy._core alias)
 - Debug logging for autonomy state changes and data readiness
 - Speed sign and steer sign correctly inverted for real car (both -1.0)
+- **AI Inference button in ros2_panel** — one-click start/stop from GTK panel
+- Inference time: ~6ms on Jetson CPU (well within 30Hz budget)
 
 ## Work in Progress
 - Stability of bringup/restart cycle — lidar sometimes fails to reconnect after restart
 
-## Recent Changes (2026-03-02)
+## Recent Changes (2026-03-26)
+- **Switched to session_car_1_3 model** — 450-ray lidar, 1820-dim state (was 128), hidden [512,512,256]
+  - Added `build_lidar_angles()` for variable-resolution lidar (0.5° front, 2.0° rear = 450 rays)
+  - New observation format: removed collision flag, added accel_feedback (previous NN action)
+  - Channel order: [speed_norm, steer_norm, accel_feedback, linear_accel, angular_vel]
+  - Servo normalization changed from [0,1] to [-1,1] centered at 0.535
+  - Added numpy._core compatibility fix in policy_loader for cross-platform checkpoint loading
+  - Model: action_scale=[1,1], action_bias=[0,1] → steer [-1,1], accel [0,2]
+  - Physics: max_speed=6.0, max_accel=2.0, max_steer=20°
+  - Old 27-ray config backed up as `driver_params_27ray.yaml`
+- **AI Inference button added to ros2_panel** — replaced "Reserved" slot with working AI toggle
+  - Builds sac_driver, launches node with params file
+  - Added orphan kill for sac_driver_node on stop
+  - Log color: #ff6b6b (red)
+
+### Previous Changes (2026-03-13)
+- **VESC motor & app configuration uploaded via custom Python script**
+  - Created `/home/laptop/vesc_config_upload.py` — standalone tool to upload VESC XML configs via serial
+  - No VESC Tool needed — communicates directly with VESC over `/dev/vesc` (115200 baud) using VESC binary protocol
+  - Motor config: 189 params (49 changed from defaults) — FOC motor type, current limits 52.78A, observer gain tuned
+  - App config: 187 params (23 changed from defaults) — controller_id=97, servo_out enabled, PPM/ADC configured
+  - Both configs verified by reading back from VESC and comparing all values
+  - VESC firmware: 6.02, hardware: HW60
+  - Config XMLs stored at `/home/laptop/Downloads/vesc_configs/motor_config.xml` and `app_config.xml`
+  - Script uses FW 6.02 parameter definitions from VESC Tool source for correct binary serialization
+  - Signature verification: Motor=0x2E43A161, App=0x1D003A2C (matched firmware)
+
+### Previous Changes (2026-03-02)
 - **Observation vector expanded from 30 to 32 elements**
   - Added `linear_acceleration` (index 30) — computed from odom speed delta/dt
   - Added `angular_velocity` (index 31) — from odom twist.angular.z
@@ -47,20 +78,24 @@
 
 ## Config Summary (driver_params.yaml)
 ```yaml
-model.path: "/home/laptop/shared/różne/best_mapa1_ep18000_clean.pth"
+model.path: "/home/laptop/shared/różne/session_car_1_3.pth"
 model.device: "cpu"
 model.weights_only: false
+lidar.front_step_deg: 0.5   # 450-ray variable resolution
+lidar.rear_step_deg: 2.0
 state.stack_frames: 4
-state.max_speed_mps: 8.0
+state.max_speed_mps: 6.0
 state.max_accel_mps2: 4.0
 state.max_yaw_rate_rad_s: 3.0
-state.servo_norm_divisor: 0.9
-state.servo_norm_offset: -0.05
-state.servo_default: 0.535
+state.servo_norm_divisor: 0.435   # centered [-1,1]
+state.servo_norm_offset: -0.535
+state.servo_default: 0.0
 control.speed_sign: -1.0   # inverted for real car
 control.steer_sign: -1.0   # inverted for real car
 control.rate_hz: 30.0
 control.max_steering_angle_deg: 20.0
+control.max_speed_mps: 6.0
+control.max_accel_mps2: 2.0
 control.speed_limit_mps: 2.0
 control.safe_mode: true
 safety.watchdog_timeout_sec: 0.5
@@ -79,4 +114,4 @@ safety.watchdog_timeout_sec: 0.5
 - Added .gitignore
 - Published to https://github.com/Beba-ai-ml/ros2_ws2
 
-Last updated: 2026-03-09
+Last updated: 2026-03-26

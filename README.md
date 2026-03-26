@@ -2,7 +2,7 @@
 
 A neural network-driven autonomous racing vehicle built on ROS2 and NVIDIA Jetson Nano. The core of this project is **SAC Driver** — a real-time inference node that runs a trained **Soft Actor-Critic (SAC)** reinforcement learning policy to drive a 1/10th scale RC car at speed using only lidar and odometry.
 
-The SAC agent was trained in simulation using [occupancy_racer](https://github.com/Beba-ai-ml/occupancy-racer-sac2) and deployed to physical hardware via a modular inference pipeline. The car processes 27 lidar rays + speed + servo + acceleration + yaw rate at 30Hz, stacks 4 frames into a 128-dimensional state vector, and outputs continuous steering and throttle commands through a GaussianPolicy neural network.
+The SAC agent was trained in simulation using [occupancy_racer](https://github.com/Beba-ai-ml/occupancy-racer-sac2) and deployed to physical hardware via a modular inference pipeline. The car processes 450 lidar rays (variable-resolution: 0.5° front, 2.0° rear) + speed + steering + acceleration feedback + linear acceleration + yaw rate at 30Hz, stacks 4 frames into a **1820-dimensional state vector**, and outputs continuous steering and throttle commands through a GaussianPolicy neural network (~1.2M parameters, ~5ms inference on Jetson CPU).
 
 ## Quick Start
 
@@ -68,19 +68,19 @@ The heart of this project. A ROS2 node that runs a trained SAC neural network in
 
 ### How It Works
 
-1. **Lidar Converter** — Extracts 27 specific angles from the RPLiDAR scan with a -90deg frame offset. Normalizes distances to [0, 1] range (max 20m). Supports interpolation between scan indices.
+1. **Lidar Converter** — Extracts 450 angles from the RPLiDAR scan using variable-resolution stepping (0.5° front hemisphere, 2.0° rear hemisphere) with a -90deg frame offset and angle wrapping to [-pi, pi). Normalizes distances to [0, 1] range (max 20m). Supports interpolation between scan indices.
 
-2. **State Builder** — Builds a 32-element observation vector per frame:
-   - `[0-26]` — 27 lidar rays (distance / 20.0, clipped [0,1])
-   - `[27]` — collision flag (hardcoded 0.0 on real car)
-   - `[28]` — speed (normalized by max_speed)
-   - `[29]` — servo position (normalized)
-   - `[30]` — linear acceleration (derived from odom speed delta)
-   - `[31]` — angular velocity (from odom twist)
+2. **State Builder** — Builds a 455-element observation vector per frame:
+   - `[0-449]` — 450 lidar rays (distance / 20.0, clipped [0,1])
+   - `[450]` — speed (normalized by max_speed, [0,1])
+   - `[451]` — steering position (centered [-1,1])
+   - `[452]` — acceleration feedback (previous NN action, raw [-1,1])
+   - `[453]` — linear acceleration (derived from odom speed delta, [-1,1])
+   - `[454]` — angular velocity (from odom twist, [-1,1])
 
-   Maintains a sliding window of 4 frames → **128-float state vector** fed to the neural network.
+   Maintains a sliding window of 4 frames → **1820-float state vector** fed to the neural network.
 
-3. **Inference Engine** — Runs the `GaussianPolicy` network (3x256 hidden layers) on CPU. Input: 128 floats → Output: (steering, acceleration) in [-1, 1].
+3. **Inference Engine** — Runs the `GaussianPolicy` network (hidden layers [512, 512, 256]) on CPU. Input: 1820 floats → Output: steering in [-1, 1], acceleration in [0, 2]. ~5ms inference on Jetson Nano.
 
 4. **Control Mapper** — Maps NN output to physical Ackermann commands with rate limiting, speed limiting, safe mode scaling, and configurable sign inversion for sim→real transfer.
 
@@ -97,12 +97,13 @@ The heart of this project. A ROS2 node that runs a trained SAC neural network in
 | Property | Value |
 |----------|-------|
 | Algorithm | Soft Actor-Critic (SAC) |
-| Network | GaussianPolicy, 3x256 hidden layers |
-| State dim | 128 (32 features x 4 stacked frames) |
-| Action dim | 2 (steering, acceleration) |
-| Framework | PyTorch 1.13.1 (CPU inference) |
+| Network | GaussianPolicy, hidden [512, 512, 256] (~1.2M params) |
+| State dim | 1820 (455 features x 4 stacked frames) |
+| Action dim | 2 (steering [-1,1], acceleration [0,2]) |
+| Lidar | 450 rays, variable resolution (0.5° front, 2.0° rear) |
+| Framework | PyTorch 1.13.1 (CPU inference, ~5ms/step on Jetson) |
 | Control rate | 30 Hz |
-| Training | ~18,000 episodes in occupancy grid simulator |
+| Training | session_car_1_3 — R_01 map with opponent bot, 5368 episodes |
 
 ## Project Structure
 
@@ -112,13 +113,14 @@ ros2_ws2/
 │   ├── sac_driver/              ← AI inference node (main project)
 │   │   ├── sac_driver/
 │   │   │   ├── sac_driver_node.py    # Main ROS2 node (subscribers, timer, pipeline)
-│   │   │   ├── state_builder.py      # 32-elem frame builder + 4-frame stacking
-│   │   │   ├── lidar_converter.py    # 27-angle lidar extraction with interpolation
+│   │   │   ├── state_builder.py      # 455-elem frame builder + 4-frame stacking
+│   │   │   ├── lidar_converter.py    # 450-angle variable-resolution lidar extraction
 │   │   │   ├── inference_engine.py   # GaussianPolicy wrapper
 │   │   │   ├── policy_loader.py      # .pth loader with auto architecture detection
 │   │   │   └── control_mapper.py     # NN output → Ackermann commands
 │   │   ├── config/
-│   │   │   └── driver_params.yaml    # All runtime parameters
+│   │   │   ├── driver_params.yaml    # Runtime parameters (450-ray model)
+│   │   │   └── driver_params_27ray.yaml  # Backup: old 27-ray model config
 │   │   └── launch/
 │   │       └── sac_driver.launch.py  # Launch file with configurable args
 │   │
@@ -185,7 +187,7 @@ A native GTK3 desktop application for managing all ROS2 nodes from a single inte
 | Feature | Description |
 |---------|-------------|
 | **Boot animation** | Fade-in/fade-out splash screen |
-| **Process cards** | SETUP, Bringup, SLAM, Localize, Pursuit, Stanley |
+| **Process cards** | SETUP, Bringup, SLAM, AI Inference, Localize, Pursuit, Stanley |
 | **LED indicators** | Red (stopped), Yellow (starting), Green (running) with pulse animation |
 | **Toggle switches** | Animated on/off switches to start/stop each node |
 | **Debug console** | Color-coded live log output from all processes |
@@ -200,10 +202,14 @@ cd ros2_panel && python3 panel_app.py
 Key parameters in `src/sac_driver/config/driver_params.yaml`:
 
 ```yaml
-model.path: "/path/to/actor_weights.pth"
+model.path: "/path/to/session_car_1_3.pth"
 model.device: "cpu"
+lidar.front_step_deg: 0.5      # Variable-resolution lidar (450 rays)
+lidar.rear_step_deg: 2.0
 state.stack_frames: 4
-state.max_speed_mps: 8.0
+state.max_speed_mps: 6.0
+state.servo_norm_offset: -0.535 # Servo centered at [-1, 1]
+state.servo_norm_divisor: 0.435
 control.speed_sign: -1.0       # Flip for sim→real transfer
 control.steer_sign: -1.0       # Flip for sim→real transfer
 control.speed_limit_mps: 2.0   # Max speed cap

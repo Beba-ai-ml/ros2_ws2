@@ -1,23 +1,20 @@
 sac_driver:
   ros__parameters:
-    model.path: "/home/laptop/shared/różne/session_car_1_3.pth"
+    model.path: "/home/laptop/shared/różne/best_mapa1_ep18000_clean.pth"
     model.device: "cpu"
     model.weights_only: false
 
-    # 450-ray variable-resolution lidar (front 0.5deg, rear 2.0deg)
-    lidar.front_step_deg: 0.5
-    lidar.rear_step_deg: 2.0
+    lidar.angles_deg: [-15.0, 0.0, 15.0, 30.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0, 125.0, 130.0, 135.0, 150.0, 165.0, 180.0, 195.0]
     lidar.max_range_m: 20.0
     lidar.angle_offset_deg: -90.0
     lidar.angle_direction: 1.0
     lidar.use_interpolation: true
 
     state.stack_frames: 4
-    state.max_speed_mps: 6.0
-    # Servo normalization: (raw + offset) / divisor -> [-1, 1] centered at 0
-    state.servo_norm_divisor: 0.435
-    state.servo_norm_offset: -0.535
-    state.servo_default: 0.0
+    state.max_speed_mps: 8.0
+    state.servo_norm_divisor: 0.9
+    state.servo_norm_offset: -0.05
+    state.servo_default: 0.535
     state.speed_default: 0.0
     state.collision_default: 0.0
     state.max_accel_mps2: 4.0
@@ -25,7 +22,7 @@ sac_driver:
 
     control.rate_hz: 30.0
     control.max_steering_angle_deg: 20.0
-    control.max_speed_mps: 6.0
+    control.max_speed_mps: 8.0
     control.max_accel_mps2: 2.0
     control.speed_limit_mps: 2.0
     control.steer_rate_limit_deg_s: 90.0

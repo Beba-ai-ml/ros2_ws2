@@ -51,8 +51,8 @@ class StateBuilder:
         self,
         lidar_normalized: Sequence[float],
         speed_mps: float,
-        servo_normalized: float,
-        collision_flag: float,
+        steer_normalized: float,
+        accel_feedback: float = 0.0,
         linear_accel_mps2: float = 0.0,
         yaw_rate_rad_s: float = 0.0,
     ) -> np.ndarray:
@@ -62,13 +62,13 @@ class StateBuilder:
         lidar_arr = np.clip(lidar_arr, 0.0, 1.0)
 
         speed_norm = min(abs(float(speed_mps)) / self.max_speed_mps, 1.0)
-        servo_norm = min(max(float(servo_normalized), 0.0), 1.0)
-        collision = 1.0 if float(collision_flag) > 0.0 else 0.0
+        steer_norm = max(-1.0, min(1.0, float(steer_normalized)))
+        accel_fb = max(-1.0, min(1.0, float(accel_feedback)))
         accel_norm = max(-1.0, min(1.0, float(linear_accel_mps2) / self.max_accel_mps2))
         yaw_norm = max(-1.0, min(1.0, float(yaw_rate_rad_s) / self.max_yaw_rate_rad_s))
 
         obs = np.array(
-            list(lidar_arr) + [collision, speed_norm, servo_norm, accel_norm, yaw_norm],
+            list(lidar_arr) + [speed_norm, steer_norm, accel_fb, accel_norm, yaw_norm],
             dtype=np.float32,
         )
         return obs
@@ -77,13 +77,13 @@ class StateBuilder:
         self,
         lidar_normalized: Sequence[float],
         speed_mps: float,
-        servo_normalized: float,
-        collision_flag: float = 0.0,
+        steer_normalized: float,
+        accel_feedback: float = 0.0,
         linear_accel_mps2: float = 0.0,
         yaw_rate_rad_s: float = 0.0,
     ) -> np.ndarray:
         obs = self._build_observation(
-            lidar_normalized, speed_mps, servo_normalized, collision_flag,
+            lidar_normalized, speed_mps, steer_normalized, accel_feedback,
             linear_accel_mps2, yaw_rate_rad_s,
         )
         if self.stack_frames <= 1:

@@ -23,4 +23,8 @@ Autonomous racing vehicle inference node — runs a trained SAC (Soft Actor-Crit
 - `README.md` — Professional GitHub-ready README
 - `DOCUMENTATION.md` — Full module-level reference documentation
 
-Last updated: 2026-03-09
+## Tools
+- **VESC Config Upload:** `/home/laptop/vesc_config_upload.py` — uploads motor/app XML configs to VESC via serial (no VESC Tool needed)
+- **VESC Tool source:** `/home/laptop/vesc_tool/` (parameter definitions for FW 6.02)
+
+Last updated: 2026-03-13

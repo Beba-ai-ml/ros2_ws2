@@ -16,7 +16,7 @@ from std_msgs.msg import Bool, Float64
 from std_srvs.srv import SetBool
 
 from .control_mapper import ControlMapper
-from .lidar_converter import LidarConverter
+from .lidar_converter import LidarConverter, build_lidar_angles
 from .state_builder import StateBuilder
 
 try:
@@ -61,13 +61,20 @@ class SACDriverNode(Node):
         lidar_angle_direction = float(self._param("lidar.angle_direction", 1.0))
         lidar_use_interpolation = bool(self._param("lidar.use_interpolation", True))
 
+        lidar_front_step = float(self._param("lidar.front_step_deg", 0.0))
+        lidar_rear_step = float(self._param("lidar.rear_step_deg", 0.0))
+        if lidar_front_step > 0.0 and lidar_rear_step > 0.0:
+            lidar_angles = build_lidar_angles(lidar_front_step, lidar_rear_step)
+            self.get_logger().info(
+                f"Lidar: {len(lidar_angles)} angles (front_step={lidar_front_step}, rear_step={lidar_rear_step})"
+            )
+
         stack_frames = int(self._param("state.stack_frames", 4))
         max_speed_mps = float(self._param("state.max_speed_mps", 8.0))
         servo_norm_divisor = float(self._param("state.servo_norm_divisor", 20.0))
         servo_norm_offset = float(self._param("state.servo_norm_offset", 0.0))
         servo_default = float(self._param("state.servo_default", 0.5))
         speed_default = float(self._param("state.speed_default", 0.0))
-        collision_default = float(self._param("state.collision_default", 0.0))
         max_accel_mps2 = float(self._param("state.max_accel_mps2", 4.0))
         max_yaw_rate_rad_s = float(self._param("state.max_yaw_rate_rad_s", 3.0))
 
@@ -104,9 +111,8 @@ class SACDriverNode(Node):
 
         self._servo_norm_divisor = servo_norm_divisor if servo_norm_divisor != 0 else 1.0
         self._servo_norm_offset = servo_norm_offset
-        self._servo_default = _clamp(servo_default, 0.0, 1.0)
+        self._servo_default = float(servo_default)
         self._speed_default = speed_default
-        self._collision_default = collision_default
         self._watchdog_timeout = max(0.0, watchdog_timeout)
 
         if not model_path:
@@ -174,6 +180,7 @@ class SACDriverNode(Node):
         self.latest_linear_accel: float = 0.0
         self._prev_speed_mps: float = 0.0
         self._prev_odom_time = None
+        self._last_accel_feedback: float = 0.0
 
         self._last_scan_time = None
         self._last_odom_time = None
@@ -328,7 +335,7 @@ class SACDriverNode(Node):
                 servo_norm = self._servo_default
             else:
                 servo_norm = (float(self.latest_servo_value) + self._servo_norm_offset) / self._servo_norm_divisor
-            servo_norm = _clamp(servo_norm, 0.0, 1.0)
+            servo_norm = _clamp(servo_norm, -1.0, 1.0)
             if self.latest_servo_value is not None:
                 self._throttled_log(
                     "SERVO DEBUG: raw=%.4f norm=%.4f offset=%.3f divisor=%.3f",
@@ -338,15 +345,16 @@ class SACDriverNode(Node):
                     float(self._servo_norm_divisor),
                 )
 
-            collision_flag = 1.0 if self._collision_default > 0.0 else 0.0
             sensor_accel = self.latest_linear_accel
             sensor_yaw = self.latest_yaw_rate
             if self._needs_reset:
                 speed_norm = min(abs(speed_mps) / self.state_builder.max_speed_mps, 1.0)
-                accel_norm = max(-1.0, min(1.0, sensor_accel / self.state_builder.max_accel_mps2))
-                yaw_norm = max(-1.0, min(1.0, sensor_yaw / self.state_builder.max_yaw_rate_rad_s))
+                steer_norm = _clamp(servo_norm, -1.0, 1.0)
+                accel_fb = _clamp(self._last_accel_feedback, -1.0, 1.0)
+                accel_norm = _clamp(sensor_accel / self.state_builder.max_accel_mps2, -1.0, 1.0)
+                yaw_norm = _clamp(sensor_yaw / self.state_builder.max_yaw_rate_rad_s, -1.0, 1.0)
                 first_obs = np.array(
-                    list(lidar_norm) + [collision_flag, speed_norm, servo_norm, accel_norm, yaw_norm],
+                    list(lidar_norm) + [speed_norm, steer_norm, accel_fb, accel_norm, yaw_norm],
                     dtype=np.float32,
                 )
                 state = self.state_builder.reset(first_obs)
@@ -354,12 +362,20 @@ class SACDriverNode(Node):
                 self._needs_reset = False
             else:
                 state = self.state_builder.update(
-                    lidar_norm, speed_mps, servo_norm, collision_flag, sensor_accel, sensor_yaw,
+                    lidar_norm, speed_mps, servo_norm, self._last_accel_feedback,
+                    sensor_accel, sensor_yaw,
                 )
 
             steer, accel = self.engine.get_action(state)
             if not math.isfinite(steer) or not math.isfinite(accel):
                 raise ValueError("Policy returned non-finite action")
+
+            # Update accel feedback for next observation (raw action before scaling)
+            accel_scale = self.engine.policy.action_scale[1].item()
+            accel_bias = self.engine.policy.action_bias[1].item()
+            self._last_accel_feedback = _clamp(
+                (accel - accel_bias) / max(abs(accel_scale), 1e-6), -1.0, 1.0
+            )
 
             cmd = self.control_mapper.map_to_ackermann(steer, accel, speed_mps, dt=dt)
         except Exception as exc:  # pylint: disable=broad-except
