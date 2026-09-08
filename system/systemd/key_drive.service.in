@@ -1,0 +1,22 @@
+[Unit]
+Description=F1TENTH keyboard drive (bringup + key_drive, keyboard plugged into the car)
+After=multi-user.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=@USER@
+Group=@USER@
+SupplementaryGroups=dialout input video plugdev
+Environment=HOME=@HOME@
+WorkingDirectory=@WS@
+ExecStart=/bin/bash @WS@/scripts/key_drive_boot.sh
+Restart=always
+RestartSec=3
+KillMode=mixed
+TimeoutStopSec=15
+StandardOutput=append:@WS@/log/key_drive_boot.log
+StandardError=append:@WS@/log/key_drive_boot.log
+
+[Install]
+WantedBy=multi-user.target

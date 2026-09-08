@@ -1,0 +1,25 @@
+# F1TENTH / ros2_ws Python dependencies (Jetson Orin Nano, JetPack 5.1.5, Python 3.8)
+#
+# Install with:
+#     pip3 install --user -r requirements.txt
+#
+# Notes:
+#  - torch 1.13.1 is the plain CPU wheel from PyPI; the aarch64 cp38 build works
+#    on JetPack 5.x. Swap it for an NVIDIA CUDA wheel if you want GPU inference.
+#  - Versions below are the ones verified on the car.
+
+numpy==1.24.4
+torch==1.13.1
+pyserial==3.5
+PyYAML>=5.3.1
+evdev==1.9.2
+
+# LED strip (WS2812 over SPI1 on the 40-pin header)
+Jetson.GPIO==2.1.9
+rpi-ws281x==5.0.0
+Adafruit-Blinka==8.68.0
+adafruit-circuitpython-neopixel-spi==1.0.14
+adafruit-circuitpython-neopixel==6.3.18
+
+# used by particle_filter (installed always; tiny)
+transforms3d

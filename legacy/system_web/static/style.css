@@ -1,0 +1,413 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: #1a1a2e;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 30px 20px;
+}
+
+/* ========== Boot Animation ========== */
+.boot-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    animation: boot-fade-out 1.5s ease-in 3.5s forwards;
+}
+
+.boot-title {
+    font-size: 2.8em;
+    color: #00d4ff;
+    opacity: 0;
+    text-shadow: 0 0 0px rgba(0, 212, 255, 0);
+    animation: boot-text-glow 3.5s ease-in-out forwards;
+    text-align: center;
+}
+
+@keyframes boot-text-glow {
+    0% {
+        opacity: 0;
+        text-shadow: 0 0 0px rgba(0, 212, 255, 0);
+    }
+    30% {
+        opacity: 0.6;
+        text-shadow: 0 0 10px rgba(0, 212, 255, 0.3), 0 0 20px rgba(0, 212, 255, 0.2);
+    }
+    57% {
+        opacity: 1;
+        text-shadow: 0 0 20px rgba(0, 212, 255, 0.6), 0 0 40px rgba(0, 212, 255, 0.4), 0 0 80px rgba(0, 212, 255, 0.2);
+    }
+    100% {
+        opacity: 1;
+        text-shadow: 0 0 30px rgba(0, 212, 255, 0.8), 0 0 60px rgba(0, 212, 255, 0.5), 0 0 120px rgba(0, 212, 255, 0.3);
+    }
+}
+
+@keyframes boot-fade-out {
+    0% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+}
+
+.main-content {
+    opacity: 0;
+    animation: main-fade-in 1s ease-in 4s forwards;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+@keyframes main-fade-in {
+    0% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+body.boot-done .boot-overlay {
+    display: none;
+}
+
+body.boot-done .main-content {
+    opacity: 1;
+    animation: none;
+}
+
+/* ========== Main Layout ========== */
+.container {
+    max-width: 700px;
+    width: 100%;
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 2em;
+    color: #00d4ff;
+    text-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+/* Setup row - full width */
+.setup-row {
+    margin-bottom: 20px;
+}
+
+.setup-row .process-card {
+    width: 100%;
+    background: linear-gradient(135deg, #16213e, #1a1a40);
+    border: 1px solid #0f3460;
+}
+
+/* Grid layout 2x3 */
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+/* Process card */
+.process-card {
+    background: linear-gradient(135deg, #16213e, #1a1a40);
+    border: 1px solid #0f3460;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: box-shadow 0.3s ease, transform 0.15s ease;
+}
+
+.process-card:hover {
+    box-shadow: 0 4px 20px rgba(0, 212, 255, 0.1);
+    transform: translateY(-1px);
+}
+
+.process-card.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.process-name {
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+/* LED indicators */
+.led {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: inline-block;
+    background-color: #ff4444;
+    box-shadow: 0 0 6px #ff4444, 0 0 12px rgba(255, 68, 68, 0.4);
+    transition: background-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.led.led-running {
+    background-color: #44ff44;
+    box-shadow: 0 0 6px #44ff44, 0 0 12px rgba(68, 255, 68, 0.4);
+    animation: glow-green 2s ease-in-out infinite;
+}
+
+.led.led-starting {
+    background-color: #ffdd44;
+    box-shadow: 0 0 6px #ffdd44, 0 0 12px rgba(255, 221, 68, 0.4);
+    animation: glow-yellow 1s ease-in-out infinite;
+}
+
+.led.led-stopped {
+    background-color: #ff4444;
+    box-shadow: 0 0 6px #ff4444, 0 0 12px rgba(255, 68, 68, 0.4);
+}
+
+.led.led-disabled {
+    background-color: #555;
+    box-shadow: none;
+}
+
+@keyframes glow-green {
+    0%, 100% { box-shadow: 0 0 6px #44ff44, 0 0 12px rgba(68, 255, 68, 0.4); }
+    50% { box-shadow: 0 0 10px #44ff44, 0 0 20px rgba(68, 255, 68, 0.6); }
+}
+
+@keyframes glow-yellow {
+    0%, 100% { box-shadow: 0 0 6px #ffdd44, 0 0 12px rgba(255, 221, 68, 0.4); }
+    50% { box-shadow: 0 0 10px #ffdd44, 0 0 20px rgba(255, 221, 68, 0.6); }
+}
+
+/* Toggle switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 56px;
+    height: 28px;
+    flex-shrink: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #333;
+    transition: 0.3s;
+    border-radius: 28px;
+    border: 2px solid #555;
+}
+
+.slider::before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 2px;
+    bottom: 2px;
+    background-color: #aaa;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: #0f3460;
+    border-color: #00d4ff;
+}
+
+input:checked + .slider::before {
+    transform: translateX(28px);
+    background-color: #00d4ff;
+}
+
+input:disabled + .slider {
+    cursor: not-allowed;
+    opacity: 0.4;
+}
+
+/* ========== SETUP Button ========== */
+.setup-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.setup-btn {
+    background: transparent;
+    color: #00d4ff;
+    border: 2px solid #00d4ff;
+    border-radius: 8px;
+    padding: 8px 24px;
+    font-size: 0.95em;
+    font-weight: 700;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+}
+
+.setup-btn:hover {
+    background: rgba(0, 212, 255, 0.1);
+    box-shadow: 0 0 16px rgba(0, 212, 255, 0.4);
+}
+
+.setup-btn:active {
+    transform: scale(0.96);
+}
+
+.setup-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.setup-status {
+    font-size: 0.85em;
+    font-weight: 600;
+    min-width: 80px;
+}
+
+.setup-status.success {
+    color: #44ff44;
+}
+
+.setup-status.error {
+    color: #ff4444;
+}
+
+.setup-status.running {
+    color: #ffdd44;
+}
+
+/* ========== Debug Console ========== */
+.debug-console {
+    margin-top: 24px;
+    border: 1px solid #0f3460;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #0d1117;
+}
+
+.debug-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #16213e, #1a1a40);
+    border-bottom: 1px solid #0f3460;
+    font-weight: 600;
+    font-size: 0.95em;
+    color: #00d4ff;
+}
+
+.debug-clear {
+    background: transparent;
+    color: #888;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 0.8em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.debug-clear:hover {
+    color: #ff4444;
+    border-color: #ff4444;
+}
+
+.debug-output {
+    padding: 12px 16px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: 'Courier New', Consolas, monospace;
+    font-size: 0.82em;
+    line-height: 1.5;
+    color: #39ff14;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.debug-output::-webkit-scrollbar {
+    width: 8px;
+}
+
+.debug-output::-webkit-scrollbar-track {
+    background: #0d1117;
+}
+
+.debug-output::-webkit-scrollbar-thumb {
+    background: #1a3a5c;
+    border-radius: 4px;
+}
+
+/* Process name colors in debug console */
+.log-line .log-process-SETUP { color: #ff79c6; }
+.log-line .log-process-Bringup { color: #50fa7b; }
+.log-line .log-process-SLAM { color: #8be9fd; }
+.log-line .log-process-Localize { color: #ffb86c; }
+.log-line .log-process-Pursuit { color: #bd93f9; }
+.log-line .log-process-Stanley { color: #f1fa8c; }
+
+.log-line {
+    margin: 0;
+    padding: 0;
+}
+
+/* Responsive */
+@media (max-width: 500px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
+    h1 {
+        font-size: 1.5em;
+    }
+
+    .process-card {
+        padding: 16px;
+    }
+
+    .boot-title {
+        font-size: 1.8em;
+    }
+
+    .debug-output {
+        max-height: 200px;
+        font-size: 0.75em;
+    }
+}

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=ROS2 Control Panel
+Comment=GTK3 control panel for the F1TENTH car
+Exec=bash -c "cd @WS@/ros2_panel && python3 panel_app.py"
+Icon=utilities-terminal
+Terminal=false
+Categories=Development;Utility;

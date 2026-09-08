@@ -1,0 +1,4 @@
+# F1TENTH passwordless sudo for the handful of commands the control panel and
+# the key_drive service need. Installed by install.sh to /etc/sudoers.d/f1tenth
+# (mode 0440) after validation with `visudo -c -f`.
+@USER@ ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/sbin/shutdown, /bin/systemctl start key_drive.service, /bin/systemctl stop key_drive.service, /bin/systemctl restart key_drive.service, /bin/chmod 666 /dev/vesc, /bin/chmod 666 /dev/rplidar

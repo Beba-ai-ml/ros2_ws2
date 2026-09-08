@@ -11,6 +11,10 @@
 - [stanley_avoidance](#stanley_avoidance) — Stanley controller
 - [slam_toolbox](#slam_toolbox) — SLAM
 - [Utilities](#utilities) — Supporting packages
+- [scripts/](#scripts) — Keyboard drive, LED strip
+- [tools/](#tools) — VESC uploader, lidar diagnostics
+- [system/](#system) — udev, systemd, sudoers, desktop templates
+- [local_python/](#local_python) — Patched joy_teleop, GPIO shutdown
 
 ---
 
@@ -142,13 +146,14 @@ Builds the 1820-float state vector from sensor data.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `model.path` | string | — | Path to .pth weights file |
+| `model.path` | string | `"weights/session_Rybnik_02_1.pth"` | Checkpoint path. Relative paths resolve against the package share dir (`install/sac_driver/share/sac_driver/`), falling back to the source tree. Absolute, `~/...` and `package://sac_driver/...` also work. |
 | `model.device` | string | `"cpu"` | PyTorch device |
 | `model.weights_only` | bool | `false` | torch.load weights_only flag |
 | `lidar.front_step_deg` | float | `0.5` | Front hemisphere angular step (0 = use angles_deg list) |
 | `lidar.rear_step_deg` | float | `2.0` | Rear hemisphere angular step (0 = use angles_deg list) |
 | `lidar.angles_deg` | float[] | 27 angles | Explicit target angles (overridden when front/rear step > 0) |
-| `lidar.angle_offset_deg` | float | `-90.0` | Lidar frame offset |
+| `lidar.angle_offset_deg` | float | `0.0` | Lidar frame offset. `0.0` for the current 450-ray models (0 deg = forward); `-90.0` for the old 27-ray model. |
+| `lidar.angle_direction` | float | `1.0` | Direction of increasing lidar angle (`-1.0` to mirror) |
 | `lidar.max_range_m` | float | `20.0` | Max lidar range for normalization |
 | `lidar.use_interpolation` | bool | `true` | Interpolate between scan indices |
 | `state.stack_frames` | int | `4` | Number of frames to stack |
@@ -161,7 +166,7 @@ Builds the 1820-float state vector from sensor data.
 | `control.rate_hz` | float | `30.0` | Control loop frequency |
 | `control.enable_on_start` | bool | `false` | Auto-enable on node start |
 | `control.speed_sign` | float | `-1.0` | Speed direction flip |
-| `control.steer_sign` | float | `-1.0` | Steering direction flip |
+| `control.steer_sign` | float | `1.0` | Steering direction flip (pairs with `lidar.angle_offset_deg`) |
 | `control.max_steering_angle_deg` | float | `20.0` | Max steering angle |
 | `control.speed_limit_mps` | float | `2.0` | Speed cap |
 | `control.safe_mode` | bool | `true` | Enable safe mode scaling |
@@ -169,8 +174,10 @@ Builds the 1820-float state vector from sensor data.
 | `topics.scan` | string | `"/scan"` | Lidar topic |
 | `topics.odom` | string | `"/odom"` | Odometry topic |
 | `topics.servo` | string | `"/commands/servo/position"` | Servo topic |
-| `topics.drive` | string | `"/drive"` | Output drive topic |
-| `topics.autonomy_lock` | string | `"/autonomy_lock"` | Deadman switch topic |
+| `topics.cmd` | string | `"/drive"` | Output drive topic |
+| `topics.emergency_stop` | string | `"/autonomy_lock"` | Deadman switch topic |
+| `topics.enable_service` | string | `"/sac_driver/enable"` | Enable/disable service name |
+| `debug.log_throttle_sec` | float | `1.0` | Minimum interval between repeated debug logs |
 
 ---
 
@@ -215,7 +222,7 @@ Launches the full hardware stack:
 
 **Purpose:** GTK3 desktop application for managing ROS2 nodes.
 
-**Location:** `/home/laptop/ros2_panel/` (separate from the ROS2 workspace)
+**Location:** `ros2_panel/` in the repository root. It used to live at `~/ros2_panel`; all paths are now derived from the repository location, so a clone in any directory works. Start it with `python3 ros2_panel/panel_app.py` or the `ros2_panel/ros2panel` wrapper. `install.sh --desktop` writes a launcher to `~/Desktop` from `system/desktop/ROS2-Panel.desktop.in`.
 
 ### `panel_app.py` — Main Application
 
@@ -228,6 +235,21 @@ Launches the full hardware stack:
 | `ROS2Panel` | Main window. 2x3 grid of process cards + debug console. Polls ProcessManager at 1Hz for status, 500ms for logs |
 
 **Managed processes:** SETUP, Bringup, SLAM, AI Inference, Localize, Pursuit, Stanley
+
+**Process commands** (defined in `PROCESS_DEFINITIONS`):
+
+| Card | What it runs |
+|------|--------------|
+| SETUP | Enables the `spidev` module, fixes `/dev/rplidar` + `/dev/vesc` permissions, adds the user to `dialout`, lights the LED strip (`scripts/ledy.py`) |
+| Bringup | `colcon build --packages-select f1tenth_stack` then `ros2 launch f1tenth_stack bringup_launch3.py` |
+| SLAM | `ros2 launch slam_toolbox online_async_launch.py params_file:=src/slam_toolbox/config/mapper_params_online_async.yaml`, plus `rviz2 -d config/slam_rviz.rviz` in the background after 3 s |
+| AI Inference | Builds `sac_driver`, then runs `sac_driver_node` with `src/sac_driver/config/driver_params.yaml` |
+| Localize | Builds and launches `particle_filter` (`localize_launch.py`) |
+| Pursuit | Builds and launches `pure_pursuit` (`pure_pursuit_launch.py`) |
+| Stanley | Builds and launches `stanley_avoidance` (`stanley_avoidance_launch.py`) |
+
+**Battery bar:** reads `voltage_input` from the VESC topic `/sensors/core` every 2 s and maps it to
+a percentage (12 V = 100 %, 9 V = 0 %; green above 50 %, yellow 20-50 %, red below).
 
 ### `process_manager.py` — Process Lifecycle Manager
 
@@ -243,7 +265,7 @@ Launches the full hardware stack:
 
 ### `scan_test.py` — Lidar Calibration Utility
 
-Diagnostic tool that reads one `/scan` message and identifies the closest 20 points. Used to verify the lidar frame offset (-90deg) by placing an object directly in front of the vehicle.
+Diagnostic tool that reads one `/scan` message and identifies the closest 20 points. Used to verify `lidar.angle_offset_deg` by placing an object directly in front of the vehicle.
 
 ### `panel.css` — Dark Theme Stylesheet
 
@@ -309,7 +331,9 @@ Emergency braking node. Computes Time-To-Collision (TTC) from lidar ranges and v
 SLAMTEC RPLiDAR ROS2 driver. Publishes `/scan` (LaserScan) topic.
 
 ### slam_toolbox
-ROS2 SLAM implementation for online/offline mapping.
+Upstream ROS2 SLAM source, kept for reference and for its config file
+(`src/slam_toolbox/config/mapper_params_online_async.yaml`). **It is not built** — the apt
+package `ros-foxy-slam-toolbox` is what actually runs.
 
 ### scan_matching
 Scan matching algorithms for lidar-based localization.
@@ -318,4 +342,210 @@ Scan matching algorithms for lidar-based localization.
 Fast ray casting library for particle filter localization. Pre-compiled for the target platform.
 
 ### teleop_tools
-Joystick teleop utilities for manual driving.
+Empty placeholder directory. Manual driving goes through the patched `joy_teleop` in
+`local_python/` (see below) plus `joy_mode_manager`.
+
+### f1tenth_system
+Upstream F1TENTH system repository — only its README is kept; nothing here is built.
+
+### src/scripts
+Docker helper scripts (`run_container.sh`, `resume_container.sh`) for the upstream F1TENTH
+image. Not used by this workspace.
+
+---
+
+## scripts
+
+Standalone helper scripts outside the ROS2 packages. Run them from the repository root.
+
+### `key_drive.sh` — one-shot keyboard driving session
+
+Bash wrapper that gets the car ready and hands over to `key_drive.py`:
+
+1. Exports `DISPLAY=${DISPLAY:-:1004}` (NoMachine session on this car) and sources ROS2 + the
+   workspace overlay.
+2. Fixes `/dev/vesc` and `/dev/rplidar` permissions if they are not writable, and aborts when
+   `/dev/vesc` is missing.
+3. Stops `key_drive.service` if it is active (only one process may own the VESC port) and
+   restarts it on exit.
+4. Reuses a running bringup if `vesc_driver_node` is already up; otherwise builds
+   `f1tenth_stack` and starts `bringup_launch3.py` in a new session, logging to
+   `log/key_drive_bringup.log`.
+5. Waits up to 40 s for `/sensors/core`, then runs `scripts/key_drive.py "$@"`.
+6. On exit, stops the bringup it started and kills orphan nodes — unless `KEEP_BRINGUP=1`.
+
+```bash
+scripts/key_drive.sh                  # defaults
+scripts/key_drive.sh --speed 0.5      # any key_drive.py option passes through
+KEEP_BRINGUP=1 scripts/key_drive.sh   # leave bringup running
+```
+
+### `key_drive.py` — keyboard teleop node
+
+Publishes `AckermannDriveStamped` on `/teleop_gated` at 20 Hz — mux priority 100, so it
+bypasses the joystick deadman and is **not** masked by `/autonomy_lock`.
+
+| Element | Description |
+|---------|-------------|
+| `SPEED_SIGN = -1.0` | Module constant. On this car a positive `drive.speed` drives the motor backwards, so Up sends a negative speed. Must match `control.speed_sign` in `driver_params.yaml`. |
+| `class XKeyboard` | Polls key state from the X server via `XQueryKeymap` (ctypes on `libX11`). Works over NoMachine. |
+| evdev backend | Reads `/dev/input/event*` directly. Hot-plug safe: waits for a keyboard, re-attaches after unplug, sends STOP the moment the keyboard disappears. Used by the boot service. |
+| terminal backend | Raw-mode stdin fallback; a key press stays "held" for `TERM_HOLD_S` (0.5 s). |
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| `--speed` | `2.0` | m/s for Up/Down |
+| `--steer` | `0.3` | rad for Left/Right |
+| `--max-speed` | `4.0` | ceiling for the `+` key |
+| `--topic` | `/teleop_gated` | output topic |
+| `--evdev` | off | force the evdev backend |
+| `--no-grab` | off | evdev: do not grab the keyboard exclusively |
+| `--no-quit-key` | off | ignore `q` (used by the boot service) |
+| `--no-x` | off | force the terminal backend |
+
+Keys: Up/W forward, Down/S reverse, Left/A and Right/D steer, Space or Esc stop, `+`/`-`
+adjust speed by 0.25 m/s, `q` or Ctrl-C quits.
+
+### `key_drive_boot.sh` — systemd entry point
+
+Runs as `ExecStart` of `key_drive.service`. Kills leftovers from a previous instance (never two
+VESC drivers on one port), waits for `/dev/vesc` to enumerate, starts `bringup_launch3.py`,
+waits for `/sensors/core` (40 s), then runs `key_drive.py --evdev --no-quit-key`. It then
+supervises both children **and** the drive chain (`vesc_driver_node`, `ackermann_to_vesc_node`,
+`ackermann_mux`) — a single crashed node does not stop `ros2 launch`, so the script exits
+non-zero and lets systemd (`Restart=always`) restart the whole pair. Logs to
+`log/key_drive_boot.log`.
+
+### `key_drive_test.py` — automated direction test
+
+**The car must be off the ground.** Publishes forward, reverse, left and right on
+`/teleop_gated` for a couple of seconds each and checks the feedback: motor ERPM from
+`/sensors/core` (`VescStateStamped`), the servo command on `/commands/servo/position`, and the
+motor speed command on `/commands/motor/speed`. Used when commissioning a new car to confirm
+the speed sign and steering direction.
+
+### `bt_pad_connect.sh` — Bluetooth gamepad auto-connect
+
+Endless loop that waits for the Bluetooth adapter, powers it on, and reconnects the gamepad
+whenever the link drops (`bluetoothctl connect $PAD_MAC`, retry every 4 s; `modprobe hid_sony`
+at startup). Once connected, joydev creates `/dev/input/js0` and `joy_linux_node` from the
+bringup picks it up without further configuration. The pad MAC defaults to a DualShock 4 paired
+with this car and can be overridden with the `PAD_MAC` environment variable. Pad controls:
+hold L1 (button 4) as deadman, left stick Y = throttle, right stick X = steering.
+
+Runs on this car as `bt_pad.service` (`After=bluetooth.service`, `Restart=always`, output
+appended to `log/bt_pad.log`). There is currently **no** `.in` template in `system/systemd/`
+and no `install.sh` flag for it — on a new car, run the script manually or write the unit.
+
+### `ledy.py`, `ledy2.py` — WS2812B status LEDs
+
+Drive 7 WS2812B pixels over SPI1 MOSI (40-pin header, pin 19, `/dev/spidev0.0`) using
+`adafruit-circuitpython-neopixel-spi`, GRB order. `ledy.py` lights all pixels violet and exits
+cleanly when `/dev/spidev0.0` is absent, printing a reminder to enable SPI in `jetson-io`.
+
+---
+
+## tools
+
+### `tools/vesc/vesc_config_upload.py` — VESC configuration uploader
+
+Uploads motor (MCCONF) and app (APPCONF) configuration XML files to the VESC over serial using
+the native VESC binary protocol — **no VESC Tool GUI required**. Built from the VESC Tool
+sources (`configparams.cpp`, `vbytearray.cpp`, `packet.cpp`, `commands.cpp`, `datatypes.h`) for
+firmware 6.02.
+
+```bash
+python3 tools/vesc/vesc_config_upload.py --check-sig
+python3 tools/vesc/vesc_config_upload.py --motor tools/vesc/configs/motor_config.xml --dry-run
+python3 tools/vesc/vesc_config_upload.py \
+    --motor tools/vesc/configs/motor_config.xml \
+    --app   tools/vesc/configs/app_config.xml --verify
+```
+
+| Flag | Effect |
+|------|--------|
+| `--motor <xml>` | Send an MCCONF (`COMM_SET_MCCONF`, 0x0D) |
+| `--app <xml>` | Send an APPCONF (`COMM_SET_APPCONF`, 0x10) |
+| `--dry-run` | Serialize and print, send nothing |
+| `--verify` | Read the config back after writing and compare every value |
+| `--check-sig` | Compare the CRC32 config signature with the firmware's |
+
+Supporting files:
+
+| Path | Contents |
+|------|----------|
+| `tools/vesc/params/6.02/parameters_mcconf.xml` | Motor parameter definitions for FW 6.02 |
+| `tools/vesc/params/6.02/parameters_appconf.xml` | App parameter definitions for FW 6.02 |
+| `tools/vesc/configs/motor_config.xml` | This car's motor config — FOC, current ±52.78 A (abs max 79.17 A), battery cut 10.2 → 9.0 V |
+| `tools/vesc/configs/app_config.xml` | This car's app config — controller id 97, app 3 (PPM + UART), servo output on, permanent UART on |
+
+The signature check exists because a config serialized against the wrong firmware definitions
+would be silently misinterpreted by the VESC. Always `--check-sig` before uploading to a board
+with unknown firmware.
+
+### `tools/lidar_diag.py`, `tools/lidar_test.py`
+
+Direct-to-device lidar diagnostics: open the serial port, read raw frames, and report health.
+Useful for deciding whether a missing `/scan` is a ROS problem or a hardware problem.
+
+---
+
+## system
+
+Installation templates. Files ending in `.in` contain placeholders that `install.sh` substitutes
+(`@USER@`, `@HOME@`, `@WS@`) before writing them to their system locations.
+
+| File | Installed to | Purpose |
+|------|--------------|---------|
+| `udev/99-f1tenth.rules` | `/etc/udev/rules.d/` | `SYMLINK+="rplidar"` for CP210x `10c4:ea60`, `SYMLINK+="vesc"` for STM32 VCP `0483:5740`, both `MODE:="0666"` |
+| `systemd/key_drive.service.in` | `/etc/systemd/system/key_drive.service` | Headless keyboard drive at boot. `User=@USER@`, supplementary groups `dialout input video plugdev`, `ExecStart=/bin/bash @WS@/scripts/key_drive_boot.sh`, `Restart=always`, `RestartSec=3`, `KillMode=mixed`, output appended to `@WS@/log/key_drive_boot.log` |
+| `systemd/gpio-shutdown.service.in` | `/etc/systemd/system/gpio-shutdown.service` | Runs `@WS@/local_python/gpio_shutdown.py --drive-pin 37 --sense-pin 38 --hold-seconds 0.2` as root, `Restart=always` |
+| `sudoers.d/f1tenth.in` | `/etc/sudoers.d/f1tenth` (mode 0440) | NOPASSWD allowlist: `shutdown`, `systemctl start|stop|restart key_drive.service`, `chmod 666 /dev/vesc`, `chmod 666 /dev/rplidar`. Validated with `visudo -c -f` before installation |
+| `desktop/ROS2-Panel.desktop.in` | `~/Desktop/ROS2-Panel.desktop` (with `--desktop`) | Launcher that runs the GTK control panel |
+
+No passwords appear anywhere in the repository. Privileged operations go through `sudo -n`
+against the sudoers allowlist above; anything outside it must prompt the user.
+
+> **Safety:** `key_drive.service` makes the car respond to a keyboard plugged into the Jetson
+> immediately after boot, with no deadman button. It is installed only with
+> `install.sh --key-drive-service`. Disable it with
+> `sudo systemctl disable --now key_drive.service`.
+
+---
+
+## local_python
+
+Python that must live outside the ROS2 packages.
+
+### `local_python/joy_teleop/` — patched joy_teleop
+
+A copy of the ROS2 Foxy `joy_teleop` node with one deliberate change. Upstream raises
+
+```
+JoyTeleopException: No buttons or axes configured for command '<name>'
+```
+
+for any command that declares neither `deadman_buttons` nor `deadman_axes`. The patched version
+sets `always_active = True` for such commands and keeps them permanently active:
+
+```python
+# If no deadman buttons/axes were configured, treat the command as always active.
+self.always_active = len(self.buttons) == 0 and len(self.axes) == 0
+...
+if self.always_active:
+    self.active = True
+    return
+```
+
+`src/f1tenth_stack/config/joy_teleop.yaml` defines exactly such a `default` command, so without
+the patch the bringup fails at startup. `bringup_launch3.py` prepends `<ws>/local_python` to
+`PYTHONPATH` for the `joy_teleop` node only (falling back to `~/ros2_ws/local_python`, and
+printing a warning if neither exists). **Do not resync this file with upstream.**
+
+### `local_python/gpio_shutdown.py` — GPIO power-off listener
+
+Drives BOARD pin 37 high and watches BOARD pin 38 (pulled low). When 38 stays high for
+`--hold-seconds` (0.2 s by default) — i.e. a button or jumper bridges the two pins — it calls
+`/sbin/poweroff`. Requires `Jetson.GPIO` and root, which is why it runs as a systemd service
+rather than from the panel. `system/systemd/gpio-shutdown.service.in` is the templated unit
+file used by `install.sh --gpio-shutdown`.

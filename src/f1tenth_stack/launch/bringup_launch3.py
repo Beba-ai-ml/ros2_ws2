@@ -12,10 +12,29 @@ def generate_launch_description():
     joy_teleop_config = os.path.join(pkg_share, 'config', 'joy_teleop.yaml')
     vesc_config       = os.path.join(pkg_share, 'config', 'vesc.yaml')
     mux_config        = os.path.join(pkg_share, 'config', 'mux.yaml')
-    local_python_path = os.path.join(os.path.expanduser('~'), 'ros2_ws', 'local_python')
-    pythonpath_env = os.pathsep.join(
-        [local_python_path, os.environ.get('PYTHONPATH', '')]
-    ) if os.environ.get('PYTHONPATH') else local_python_path
+    # joy_teleop is launched with <ws>/local_python prepended to PYTHONPATH: it holds a
+    # patched copy of joy_teleop that lets commands without deadman buttons stay always
+    # active (required by joy_teleop.yaml). Without it the config is rejected.
+    # pkg_share is <ws>/install/f1tenth_stack/share/f1tenth_stack, i.e. 4 levels below <ws>.
+    ws_root = os.path.abspath(os.path.join(pkg_share, *([os.pardir] * 4)))
+    local_python_path = os.path.join(ws_root, 'local_python')
+    if not os.path.isdir(local_python_path):
+        fallback = os.path.join(os.path.expanduser('~'), 'ros2_ws', 'local_python')
+        if os.path.isdir(fallback):
+            local_python_path = fallback
+
+    if os.path.isdir(local_python_path):
+        existing_pythonpath = os.environ.get('PYTHONPATH', '')
+        pythonpath_env = os.pathsep.join(
+            [local_python_path, existing_pythonpath]
+        ) if existing_pythonpath else local_python_path
+    else:
+        print(
+            '[bringup_launch3] WARNING: local_python not found (looked in '
+            f'{os.path.join(ws_root, "local_python")}); the patched joy_teleop will not be '
+            'used and joy_teleop.yaml may fail to load.'
+        )
+        pythonpath_env = os.environ.get('PYTHONPATH', '')
 
     # ======================
     # ARGUMENTY F1TENTH

@@ -1,0 +1,13 @@
+[Unit]
+Description=GPIO shutdown listener for Jetson
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 @WS@/local_python/gpio_shutdown.py --drive-pin 37 --sense-pin 38 --hold-seconds 0.2
+Restart=always
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

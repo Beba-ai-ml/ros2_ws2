@@ -1,7 +1,9 @@
+# NOTE: waypoints_path is opened relative to the process working directory.
+# Run from the workspace root (the ROS2 control panel does), or use an absolute path.
 stanley_avoidance:
   ros__parameters:
-    waypoints_path: "/home/laptop/ros2_ws/src/stanley_avoidance/racelines/K_02csv"
-    waypoints_path_2nd: "/home/laptop/ros2_ws/src/stanley_avoidance/racelines/K_02.csv"
+    waypoints_path: "src/stanley_avoidance/racelines/K_02.csv"
+    waypoints_path_2nd: "src/stanley_avoidance/racelines/K_02.csv"
     scan_topic: "/scan"
     scan_yaw_offset_deg: -230.0
     scan_range_offset_m: -0.6
@@ -31,4 +33,4 @@ stanley_avoidance:
 
 waypoint_visualizer_node:
   ros__parameters:
-    waypoints_path: "/home/laptop/ros2_ws/src/stanley_avoidance/racelines/K_02.csv"
+    waypoints_path: "src/stanley_avoidance/racelines/K_02.csv"

@@ -18,7 +18,9 @@ def _default_paths():
         return "", ""
     pkg_share = get_package_share_directory("sac_driver")
     params = os.path.join(pkg_share, "config", "driver_params.yaml")
-    model = "/home/laptop/shared/różne/session_car_1_3.pth"
+    # Checkpoints are installed into <pkg_share>/weights by setup.py, so the
+    # default works on any machine/user. Override with model_path:=<path>.
+    model = os.path.join(pkg_share, "weights", "session_Rybnik_02_1.pth")
     return params, model
 
 

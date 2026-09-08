@@ -1,6 +1,11 @@
 sac_driver:
   ros__parameters:
-    model.path: "/home/laptop/shared/różne/session_car_1_3.pth"
+    # Model checkpoint. Relative paths resolve against the package share dir
+    # (<install>/share/sac_driver/...), with the source tree src/sac_driver/
+    # as a fallback when the package has not been rebuilt yet.
+    # Absolute paths ("/abs/x.pth"), "~/x.pth" and
+    # "package://sac_driver/weights/x.pth" are also supported.
+    model.path: "weights/session_Rybnik_02_1.pth"
     model.device: "cpu"
     model.weights_only: false
 
@@ -8,7 +13,7 @@ sac_driver:
     lidar.front_step_deg: 0.5
     lidar.rear_step_deg: 2.0
     lidar.max_range_m: 20.0
-    lidar.angle_offset_deg: -90.0
+    lidar.angle_offset_deg: 0.0
     lidar.angle_direction: 1.0
     lidar.use_interpolation: true
 
@@ -38,7 +43,7 @@ sac_driver:
     control.max_yaw_rate_rad_s: 2.5
     control.default_dt: 0.033
     control.speed_sign: -1.0
-    control.steer_sign: -1.0
+    control.steer_sign: 1.0
     control.enable_on_start: false
 
     topics.scan: "/scan"

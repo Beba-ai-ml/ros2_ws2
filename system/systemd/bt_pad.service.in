@@ -1,0 +1,16 @@
+[Unit]
+Description=Bluetooth gamepad auto-connect loop (DualShock 4 for F1TENTH)
+After=bluetooth.service
+Wants=bluetooth.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/bin/bash @WS@/scripts/bt_pad_connect.sh
+Restart=always
+RestartSec=5
+StandardOutput=append:@WS@/log/bt_pad.log
+StandardError=append:@WS@/log/bt_pad.log
+
+[Install]
+WantedBy=multi-user.target

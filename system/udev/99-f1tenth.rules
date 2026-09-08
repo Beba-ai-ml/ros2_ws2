@@ -1,0 +1,5 @@
+# LIDAR SLAMTEC RPLIDAR S1 – CP210x 10c4:ea60
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="rplidar", MODE:="0666"
+
+# VESC – STM32 VCP 0483:5740
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", SYMLINK+="vesc", MODE:="0666"

@@ -1,6 +1,13 @@
 sac_driver:
   ros__parameters:
-    model.path: "/home/laptop/shared/różne/best_mapa1_ep18000_clean.pth"
+    # Model checkpoint. Relative paths resolve against the package share dir
+    # (<install>/share/sac_driver/...), with the source tree src/sac_driver/
+    # as a fallback when the package has not been rebuilt yet.
+    # Absolute paths ("/abs/x.pth"), "~/x.pth" and
+    # "package://sac_driver/weights/x.pth" are also supported.
+    # NOTE: this checkpoint is not shipped with the repo; drop it into
+    # src/sac_driver/weights/ (or point model.path at an absolute location).
+    model.path: "weights/best_mapa1_ep18000_clean.pth"
     model.device: "cpu"
     model.weights_only: false
 

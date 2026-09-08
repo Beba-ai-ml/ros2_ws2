@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROS2 Control Panel</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Boot Animation Overlay -->
+    <div class="boot-overlay" id="boot-overlay">
+        <h1 class="boot-title" id="boot-title">ROS2 Control Panel</h1>
+    </div>
+
+    <!-- Main Content (hidden during boot) -->
+    <div class="main-content" id="main-content">
+        <div class="container">
+            <h1>ROS2 Control Panel</h1>
+
+            <!-- SETUP button - full width at top -->
+            <div class="setup-row">
+                <div class="process-card" data-id="0">
+                    <div class="card-header">
+                        <span class="led" id="led-0"></span>
+                        <span class="process-name">SETUP</span>
+                    </div>
+                    <div class="setup-controls">
+                        <button class="setup-btn" id="setup-btn">SETUP</button>
+                        <span class="setup-status" id="setup-status"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main grid 2x3 -->
+            <div class="grid">
+                <div class="process-card" data-id="1">
+                    <div class="card-header">
+                        <span class="led" id="led-1"></span>
+                        <span class="process-name">Bringup</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-1">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="process-card" data-id="2">
+                    <div class="card-header">
+                        <span class="led" id="led-2"></span>
+                        <span class="process-name">SLAM</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-2">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="process-card disabled" data-id="3">
+                    <div class="card-header">
+                        <span class="led led-disabled" id="led-3"></span>
+                        <span class="process-name">Reserved</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-3" disabled>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="process-card" data-id="4">
+                    <div class="card-header">
+                        <span class="led" id="led-4"></span>
+                        <span class="process-name">Localize</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-4">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="process-card" data-id="5">
+                    <div class="card-header">
+                        <span class="led" id="led-5"></span>
+                        <span class="process-name">Pursuit</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-5">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="process-card" data-id="6">
+                    <div class="card-header">
+                        <span class="led" id="led-6"></span>
+                        <span class="process-name">Stanley</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-6">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Debug Console -->
+            <div class="debug-console">
+                <div class="debug-header">
+                    <span>Debug Console</span>
+                    <button class="debug-clear" id="debug-clear">Clear</button>
+                </div>
+                <div class="debug-output" id="debug-output"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.0/socket.io.min.js"></script>
+    <script src="/static/script.js"></script>
+</body>
+</html>

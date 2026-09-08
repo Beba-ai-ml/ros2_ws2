@@ -8,6 +8,7 @@ from typing import Optional
 
 import numpy as np
 import rclpy
+import rclpy.logging
 from rclpy.node import Node
 from ackermann_msgs.msg import AckermannDriveStamped
 from nav_msgs.msg import Odometry
@@ -25,17 +26,85 @@ except Exception:  # pragma: no cover - optional in offline usage
     get_package_share_directory = None
 
 
+_PACKAGE_URI_PREFIX = "package://"
+
+# Layout of an installed ament package:
+#   <ws>/install/<pkg>/share/<pkg>          <- package share dir
+#   <ws>/src/<pkg>                          <- source tree
+# so the workspace root is 4 levels above the share dir.
+_SHARE_TO_WS_DEPTH = 4
+
+
+def _log_info(message: str) -> None:
+    """Log at INFO level without needing a Node instance."""
+    try:
+        rclpy.logging.get_logger("sac_driver").info(message)
+    except Exception:  # pragma: no cover - logging must never break resolution
+        print(f"[sac_driver] {message}")
+
+
+def _package_share(package: str) -> Optional[Path]:
+    if get_package_share_directory is None:
+        return None
+    try:
+        return Path(get_package_share_directory(package))
+    except Exception:
+        return None
+
+
 def _resolve_path(path_str: str) -> Path:
-    path = Path(path_str)
+    """Resolve a model/config path in a machine-independent way.
+
+    Supported forms:
+      * ``package://<pkg>/<rel>``  -> ``<share dir of pkg>/<rel>``
+      * ``~/x.pth``               -> expanded against the current user's home
+      * ``/abs/x.pth``            -> used as is
+      * ``weights/x.pth``         -> relative to the ``sac_driver`` share dir,
+        falling back to the source tree ``<ws>/src/sac_driver/<rel>`` (so an
+        un-rebuilt workspace still works), then to the current directory.
+    """
+    if path_str.startswith(_PACKAGE_URI_PREFIX):
+        remainder = path_str[len(_PACKAGE_URI_PREFIX):]
+        package, _, relative = remainder.partition("/")
+        if not package or not relative:
+            raise ValueError(f"Malformed package URI: {path_str!r}")
+        base = _package_share(package)
+        if base is None:
+            raise FileNotFoundError(
+                f"Cannot resolve {path_str!r}: package '{package}' share directory not found"
+            )
+        resolved = (base / relative).resolve()
+        _log_info(f"Resolved {path_str} -> {resolved} (package share)")
+        return resolved
+
+    path = Path(path_str).expanduser()
     if path.is_absolute():
         return path
-    if get_package_share_directory is not None:
-        try:
-            base = Path(get_package_share_directory("sac_driver"))
-            return (base / path).resolve()
-        except Exception:
-            pass
-    return (Path.cwd() / path).resolve()
+
+    base = _package_share("sac_driver")
+    if base is not None:
+        share_candidate = (base / path).resolve()
+        if share_candidate.exists():
+            _log_info(f"Resolved {path_str} -> {share_candidate} (package share)")
+            return share_candidate
+
+        # Not installed (or not rebuilt yet): try the source tree next to it.
+        ws_root = base.parents[_SHARE_TO_WS_DEPTH - 1]
+        src_candidate = (ws_root / "src" / "sac_driver" / path).resolve()
+        if src_candidate.exists():
+            _log_info(f"Resolved {path_str} -> {src_candidate} (source tree)")
+            return src_candidate
+
+        # Nothing exists; report the share path so the error message is the
+        # canonical location the file is expected in.
+        _log_info(
+            f"Resolved {path_str} -> {share_candidate} (package share, file missing)"
+        )
+        return share_candidate
+
+    cwd_candidate = (Path.cwd() / path).resolve()
+    _log_info(f"Resolved {path_str} -> {cwd_candidate} (cwd)")
+    return cwd_candidate
 
 
 def _clamp(value: float, lo: float, hi: float) -> float:

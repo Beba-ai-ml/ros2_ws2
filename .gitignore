@@ -14,6 +14,7 @@ dist/
 # ML / Training
 runs/
 *.pth
+!src/sac_driver/weights/*.pth
 *.bin
 *.onnx
 checkpoints/
@@ -46,5 +47,10 @@ src/*/build/
 # Local dev files
 .claude/
 LLM_migracja/
-local_python/
 frames.pdf
+
+# Legacy web panel bytecode
+legacy/**/__pycache__/
+
+# VESC tool logs
+tools/vesc/*.log
