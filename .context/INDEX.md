@@ -5,6 +5,9 @@ Autonomous racing vehicle inference node — runs a trained SAC (Soft Actor-Crit
 ## Context Files
 - `KNOWLEDGE.md` — Architecture, key files, stack, conventions, how to run, debugging lessons
 - `STATE.md` — Current state, recent changes, decisions, known issues, gotchas
+- `HANDOFF-20260913-sim-parity.md` — **read first**: what the 2026-09-13 sim↔car parity fix changed, the
+  physical test checklist (H1-H5) still pending, decisions taken
+- `review-jazda-ai-20260913.md` — the review with evidence (file:line in sim and car) behind that fix
 
 ## Workspace Structure
 - `src/sac_driver/` — SAC inference ROS2 package (main project), weights in `weights/`
