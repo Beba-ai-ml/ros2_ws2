@@ -1,3 +1,7 @@
+# ARCHIVED PROFILE (27-ray / 128-dim model, best_mapa1_ep18000_clean.pth).
+# NOT loadable by the current sac_driver_node: since 2026-09-13 the node builds the
+# simulator's state layout [lidar, collision, speed, servo 0..1, accel, yaw] and no longer
+# reads state.servo_* / topics.servo. Kept for reference only.
 sac_driver:
   ros__parameters:
     # Model checkpoint. Relative paths resolve against the package share dir

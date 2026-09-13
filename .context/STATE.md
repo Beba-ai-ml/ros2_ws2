@@ -1,29 +1,47 @@
 # SAC Driver - Current State
 
+## 🔴 2026-09-13 — sim↔car parity fix, NOT YET DRIVEN ON THE CAR
+Branch `fix/sim-parity-20260913`. Review with evidence: `.context/review-jazda-ai-20260913.md`.
+Fixed four hard mismatches between the node and the training simulator (all four were enough on
+their own to make the car "do big strange things" while the sim policy was fine):
+1. lidar frame rotated by 90° (`angle_offset_deg 0` → `-90`, `angle_direction 1` → `-1`);
+2. state channels [450..452] were `[speed, steer(-1..1), accel_feedback]`, sim has
+   `[collision, speed, servo(0..1)]`;
+3. speed divisor 6.0 → 2.5 (training physics);
+4. weights were early snapshots of the weakest session → final `car_1_2` / `car_1_3` policies.
+Also: tick 60 Hz + policy every 8th tick (sim action_repeat), sim steering curve, no dependency
+on `/commands/servo/position`. Offline guard: `src/sac_driver/test/test_sim_parity.py` (15 tests,
+12 of them fail on the old code).
+**Before driving on the ground: wheels up, run the LEFT/RIGHT cardboard test from
+docs/TROUBLESHOOTING.md** — the lidar direction/offset came from the simulator code and the
+old March cardboard verdict is not trustworthy (front-only test, garbled state channels).
+
 ## What Works
-- Full inference pipeline: lidar → state → NN → VESC commands — **TESTED ON REAL CAR, IT DRIVES**
-- **Active model `session_Rybnik_02_1.pth`** (Rybnik_02 map) — 450-ray variable-resolution lidar,
-  1820-dim state, hidden [512,512,256]; previous model `session_car_1_3.pth` kept alongside
-- 450-angle lidar extraction with variable step (0.5° front, 2.0° rear) and **0° offset**
-  (verified by the cardboard test)
-- 4-frame stacking (1820-float state vector: 455 x 4 frames)
-- Observation: [450 lidar, speed_norm, steer_norm, accel_feedback, linear_accel, angular_vel] per frame
+- Full inference pipeline: lidar → state → NN → VESC commands (drove on the real car before the
+  2026-09-13 parity fix; the fixed pipeline still needs its first run)
+- **Active model `weights/session_car_1_2_policy.pth`** (R_01 map, final checkpoint) — 450-ray
+  variable-resolution lidar, 1820-dim state, hidden [512,512,256]; alternative
+  `session_car_1_3_final_policy.pth`
+- 450-angle lidar extraction with variable step (0.5° front, 2.0° rear), sim frame mapping
+  `ROS = 90° - sim` (`offset -90`, `direction -1`)
+- 4-frame stacking (1820-float state vector: 455 x 4 ticks at 60 Hz)
+- Observation per frame: [450 lidar, collision=0, speed_norm(/2.5), servo_norm(0..1), linear_accel, angular_vel]
 - Deadman switch via `/autonomy_lock` (hold RB to drive, release to stop); LB overrides
 - Safe mode, rate limiting, watchdog, speed cap 2.0 m/s
 - Auto-detection of model architecture from .pth weights; `_orig_mod.` prefix stripping;
   numpy._core compatibility for PC→Jetson checkpoints
-- Speed sign = -1.0, steer sign = +1.0 (verified by cardboard test with offset=0)
+- Speed sign = -1.0 (verified on the car), steer sign = +1.0 (pairs with `angle_direction -1`)
 - **Model weights tracked in git** and installed into the package share dir → `model.path` is
   relative and portable
 - **Keyboard drive** (`scripts/key_drive.sh` / `key_drive.py`) — X11, evdev and terminal backends
 - **key_drive.service** — headless bringup + keyboard drive at boot, supervises the VESC chain
 - **ros2_panel** in the repo — battery bar, SLAM + RViz, AI Inference toggle, zombie killer
-- Inference time: ~5-6 ms on the Jetson CPU (well within the 30 Hz budget)
+- Inference time: ~5-6 ms on the Jetson CPU (tick budget at 60 Hz is 16 ms; the policy runs only every 8th tick)
 
 ## Work in Progress
 - `install.sh` — one-shot installer for a fresh Jetson; written, **not yet validated on a clean machine**
 - Stability of the bringup/restart cycle — the lidar sometimes fails to reconnect after a restart
-- Real-world driving tuning of the Rybnik_02 policy (speed limit, safe mode scales)
+- First run of the parity-fixed node (cardboard left/right test, then ground run at 2 m/s)
 
 ## Recent Changes (2026-09-08) — repository portability push
 
@@ -111,9 +129,8 @@ everything works.
   right after boot, without a deadman button. Safety-relevant for anyone working on the hardware.
 - **NFS mount disconnects** — `/home/laptop/shared` may not be mounted after a reboot. Not
   critical (weights are local). Fix: `sudo mount /home/laptop/shared`.
-- **Servo data optional** — `/commands/servo/position` only publishes when the car is actively
-  driven; `_data_ready()` requires it when the servo subscription exists, which can block startup
-  until someone drives manually once.
+- **Servo subscription removed (2026-09-13)** — steering feedback is the node's own last command,
+  `_data_ready()` waits only for `/scan` and `/odom`.
 - **Safe mode is a no-op** — `safe_steer_scale = 1.0` and `safe_accel_scale = 1.0` apply no
   scaling. For cautious first runs set them below 1.0.
 - **Accel feedback channel interpretation** — channel [452] is assumed to be the previous NN raw
@@ -127,26 +144,26 @@ everything works.
 
 ## Config Summary (driver_params.yaml)
 ```yaml
-model.path: "weights/session_Rybnik_02_1.pth"   # relative to the package share dir
+model.path: "weights/session_car_1_2_policy.pth"  # relative to the package share dir
 model.device: "cpu"
 model.weights_only: false
 lidar.front_step_deg: 0.5   # 450-ray variable resolution
 lidar.rear_step_deg: 2.0
-lidar.angle_offset_deg: 0.0 # 0 deg = forward for the current models
-lidar.angle_direction: 1.0
+lidar.angle_offset_deg: -90.0  # sim 90 deg = forward
+lidar.angle_direction: -1.0    # sim 0 deg = positive-steer side = ROS left
 lidar.max_range_m: 20.0
 state.stack_frames: 4
-state.max_speed_mps: 6.0
+state.max_speed_mps: 2.5    # training physics max_speed
 state.max_accel_mps2: 4.0
 state.max_yaw_rate_rad_s: 3.0
-state.servo_norm_divisor: 0.435   # centered [-1,1]
-state.servo_norm_offset: -0.535
-state.servo_default: 0.0
 control.speed_sign: -1.0   # positive drive.speed = REVERSE on this car
 control.steer_sign: 1.0
-control.rate_hz: 30.0
+control.rate_hz: 60.0          # sim frame
+control.decision_every_n: 8    # sim action_repeat
 control.max_steering_angle_deg: 20.0
-control.max_speed_mps: 6.0
+control.min_steering_angle_deg: 5.0
+control.steer_speed_ref_mps: 8.0
+control.max_speed_mps: 2.5
 control.max_accel_mps2: 2.0
 control.speed_limit_mps: 2.0
 control.wheelbase_m: 0.35
@@ -155,19 +172,30 @@ safety.watchdog_timeout_sec: 0.5
 ```
 
 ## Next Steps
-1. Finish and validate `install.sh` on a clean Jetson (the real test of this whole push)
-2. Real-world driving tests with `session_Rybnik_02_1`; tune `speed_limit_mps` and the safe-mode
-   scales from the results
+1. **Wheels up: LEFT/RIGHT cardboard test** (docs/TROUBLESHOOTING.md) with the parity-fixed
+   node, then first ground run at `speed_limit_mps 2.0` with `session_car_1_2_policy.pth`;
+   compare with `session_car_1_3_final_policy.pth`
+2. Finish and validate `install.sh` on a clean Jetson
 3. Fix the lidar reconnect-after-restart issue
 4. Point the bringup lidar `serial_port` at `/dev/rplidar` instead of `/dev/ttyUSB0`
-5. Verify the accel_feedback channel [452] interpretation against the PC training code
-6. Consider making the servo subscription non-blocking in `_data_ready()`
-7. Re-enable / evaluate `throttle_interpolator` (config is ready, node commented out)
-8. Add IMU-based acceleration if odom-derived accel proves too noisy
+5. Re-enable / evaluate `throttle_interpolator` (config is ready, node commented out)
+6. Add IMU-based acceleration if odom-derived accel proves too noisy
+7. Wheelbase: the car has 0.35 m, the policies were trained at 0.27 m (DR 0.23-0.31) — if
+   cornering is off after the fixes, retrain with `wheelbase: 0.35` in `physics.yaml`
 
 ---
 
 ## History
+
+### 2026-09-13
+- **Sim↔car parity fix** (see the red block at the top): lidar frame `offset -90 / direction -1`,
+  observation layout `[lidar, collision, speed, servo 0..1, accel, yaw]`, speed divisor 2.5,
+  60 Hz tick + decision every 8 ticks, simulator steering curve in `ControlMapper`, steering
+  feedback from our own command (servo subscription and `state.servo_*` / `topics.servo`
+  parameters removed). Weights replaced by policy-only exports of the final `car_1_2` and
+  `car_1_3` checkpoints (`Rybnik_02_1` and the episode-5250 `car_1_3` snapshot removed).
+  New offline test `src/sac_driver/test/test_sim_parity.py`. Docs (README, DOCUMENTATION,
+  KNOWLEDGE, TROUBLESHOOTING) updated - the old texts described the wrong layout as fact.
 
 ### 2026-03-28
 - **Lidar offset fixed: -90° → 0°** — the 450-ray model uses the 0°=forward convention.

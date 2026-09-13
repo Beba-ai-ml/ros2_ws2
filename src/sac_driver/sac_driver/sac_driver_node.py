@@ -13,7 +13,7 @@ from rclpy.node import Node
 from ackermann_msgs.msg import AckermannDriveStamped
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import Bool, Float64
+from std_msgs.msg import Bool
 from std_srvs.srv import SetBool
 
 from .control_mapper import ControlMapper
@@ -139,16 +139,20 @@ class SACDriverNode(Node):
             )
 
         stack_frames = int(self._param("state.stack_frames", 4))
-        max_speed_mps = float(self._param("state.max_speed_mps", 8.0))
-        servo_norm_divisor = float(self._param("state.servo_norm_divisor", 20.0))
-        servo_norm_offset = float(self._param("state.servo_norm_offset", 0.0))
-        servo_default = float(self._param("state.servo_default", 0.5))
+        max_speed_mps = float(self._param("state.max_speed_mps", 2.5))
         speed_default = float(self._param("state.speed_default", 0.0))
         max_accel_mps2 = float(self._param("state.max_accel_mps2", 4.0))
         max_yaw_rate_rad_s = float(self._param("state.max_yaw_rate_rad_s", 3.0))
 
-        control_rate_hz = float(self._param("control.rate_hz", 30.0))
+        # Timing matches the simulator: the observation stack is pushed every
+        # tick (sim frame, 60 Hz) and the policy is queried every
+        # `decision_every_n` ticks (sim action_repeat = 8 -> 7.5 Hz); the last
+        # action is held in between.
+        control_rate_hz = float(self._param("control.rate_hz", 60.0))
+        decision_every_n = max(1, int(self._param("control.decision_every_n", 8)))
         control_max_steer_deg = float(self._param("control.max_steering_angle_deg", 20.0))
+        control_min_steer_deg = self._param("control.min_steering_angle_deg", 5.0)
+        control_steer_speed_ref = self._param("control.steer_speed_ref_mps", 8.0)
         control_max_speed_mps = float(self._param("control.max_speed_mps", 8.0))
         control_max_accel = float(self._param("control.max_accel_mps2", 2.0))
         control_speed_limit = self._param("control.speed_limit_mps", 1.0)
@@ -167,7 +171,6 @@ class SACDriverNode(Node):
 
         scan_topic = self._param("topics.scan", "/scan")
         odom_topic = self._param("topics.odom", "/odom")
-        servo_topic = self._param("topics.servo", "/sensors/servo_position_command")
         cmd_topic = self._param("topics.cmd", "/drive")
         estop_topic = self._param("topics.emergency_stop", "/autonomy_lock")
         enable_service = self._param("topics.enable_service", "/sac_driver/enable")
@@ -178,11 +181,9 @@ class SACDriverNode(Node):
         self._log_throttle_sec = max(0.1, log_throttle_sec)
         self._last_log_time = self.get_clock().now()
 
-        self._servo_norm_divisor = servo_norm_divisor if servo_norm_divisor != 0 else 1.0
-        self._servo_norm_offset = servo_norm_offset
-        self._servo_default = float(servo_default)
         self._speed_default = speed_default
         self._watchdog_timeout = max(0.0, watchdog_timeout)
+        self._decision_every_n = decision_every_n
 
         if not model_path:
             self.get_logger().warning("model.path is empty; node will not run inference until set.")
@@ -236,6 +237,12 @@ class SACDriverNode(Node):
             default_dt=control_default_dt,
             speed_sign=control_speed_sign,
             steer_sign=control_steer_sign,
+            min_steering_angle_deg=(
+                float(control_min_steer_deg) if control_min_steer_deg is not None else None
+            ),
+            steer_speed_ref_mps=(
+                float(control_steer_speed_ref) if control_steer_speed_ref is not None else None
+            ),
         )
 
         self.enabled = enable_on_start
@@ -244,24 +251,22 @@ class SACDriverNode(Node):
 
         self.latest_scan: Optional[LaserScan] = None
         self.latest_speed_mps: Optional[float] = None
-        self.latest_servo_value: Optional[float] = None
         self.latest_yaw_rate: float = 0.0
         self.latest_linear_accel: float = 0.0
         self._prev_speed_mps: float = 0.0
         self._prev_odom_time = None
-        self._last_accel_feedback: float = 0.0
+
+        # Action-repeat bookkeeping (policy output held between decisions).
+        self._ticks_since_decision: int = 0
+        self._held_action: Optional[tuple] = None
 
         self._last_scan_time = None
         self._last_odom_time = None
-        self._last_servo_time = None
         self._last_control_time = None
         self._last_stop_sent = False
 
         self.scan_sub = self.create_subscription(LaserScan, scan_topic, self._on_scan, 10)
         self.odom_sub = self.create_subscription(Odometry, odom_topic, self._on_odom, 10)
-        self.servo_sub = None
-        if servo_topic:
-            self.servo_sub = self.create_subscription(Float64, servo_topic, self._on_servo, 10)
         self.estop_sub = None
         if estop_topic:
             self.estop_sub = self.create_subscription(Bool, estop_topic, self._on_estop, 10)
@@ -295,10 +300,6 @@ class SACDriverNode(Node):
         self.latest_yaw_rate = float(msg.twist.twist.angular.z)
         self.latest_speed_mps = current_speed
         self._last_odom_time = now
-
-    def _on_servo(self, msg: Float64) -> None:
-        self.latest_servo_value = float(msg.data)
-        self._last_servo_time = self.get_clock().now()
 
     def _on_estop(self, msg: Bool) -> None:
         was_enabled = self.enabled
@@ -343,8 +344,6 @@ class SACDriverNode(Node):
 
         if not _fresh(self._last_scan_time) or not _fresh(self._last_odom_time):
             return False
-        if self.servo_sub is not None and not _fresh(self._last_servo_time):
-            return False
         return True
 
     def _publish_stop(self, now, reason: str) -> None:
@@ -381,10 +380,9 @@ class SACDriverNode(Node):
             return
         if not self._data_ready(now):
             self._throttled_log(
-                "Waiting for data: scan=%s odom=%s servo=%s",
+                "Waiting for data: scan=%s odom=%s",
                 self.latest_scan is not None,
                 self.latest_speed_mps is not None,
-                self.latest_servo_value is not None,
             )
             self._publish_stop(now, "data_missing")
             return
@@ -400,51 +398,37 @@ class SACDriverNode(Node):
         try:
             lidar_norm = self.converter.convert(self.latest_scan)
             speed_mps = float(self.latest_speed_mps) if self.latest_speed_mps is not None else self._speed_default
-            if self.latest_servo_value is None:
-                servo_norm = self._servo_default
-            else:
-                servo_norm = (float(self.latest_servo_value) + self._servo_norm_offset) / self._servo_norm_divisor
-            servo_norm = _clamp(servo_norm, -1.0, 1.0)
-            if self.latest_servo_value is not None:
-                self._throttled_log(
-                    "SERVO DEBUG: raw=%.4f norm=%.4f offset=%.3f divisor=%.3f",
-                    float(self.latest_servo_value),
-                    float(servo_norm),
-                    float(self._servo_norm_offset),
-                    float(self._servo_norm_divisor),
-                )
-
             sensor_accel = self.latest_linear_accel
             sensor_yaw = self.latest_yaw_rate
+
             if self._needs_reset:
-                speed_norm = min(abs(speed_mps) / self.state_builder.max_speed_mps, 1.0)
-                steer_norm = _clamp(servo_norm, -1.0, 1.0)
-                accel_fb = _clamp(self._last_accel_feedback, -1.0, 1.0)
-                accel_norm = _clamp(sensor_accel / self.state_builder.max_accel_mps2, -1.0, 1.0)
-                yaw_norm = _clamp(sensor_yaw / self.state_builder.max_yaw_rate_rad_s, -1.0, 1.0)
-                first_obs = np.array(
-                    list(lidar_norm) + [speed_norm, steer_norm, accel_fb, accel_norm, yaw_norm],
-                    dtype=np.float32,
+                # Fresh episode: like the simulator, the stack is filled with the
+                # first frame and the steering feedback starts at "straight".
+                self.control_mapper.reset(speed_mps)
+                first_obs = self.state_builder.build_observation(
+                    lidar_norm, speed_mps, 0.0, sensor_accel, sensor_yaw,
                 )
                 state = self.state_builder.reset(first_obs)
-                self.control_mapper.reset(speed_mps)
+                self._held_action = None
+                self._ticks_since_decision = 0
                 self._needs_reset = False
             else:
+                # Steering feedback = the command we sent last tick, in policy
+                # space (sim: servo_norm = (steer_action + 1) / 2).
                 state = self.state_builder.update(
-                    lidar_norm, speed_mps, servo_norm, self._last_accel_feedback,
+                    lidar_norm, speed_mps, self.control_mapper.last_steer_norm,
                     sensor_accel, sensor_yaw,
                 )
 
-            steer, accel = self.engine.get_action(state)
-            if not math.isfinite(steer) or not math.isfinite(accel):
-                raise ValueError("Policy returned non-finite action")
-
-            # Update accel feedback for next observation (raw action before scaling)
-            accel_scale = self.engine.policy.action_scale[1].item()
-            accel_bias = self.engine.policy.action_bias[1].item()
-            self._last_accel_feedback = _clamp(
-                (accel - accel_bias) / max(abs(accel_scale), 1e-6), -1.0, 1.0
-            )
+            if self._held_action is None or self._ticks_since_decision >= self._decision_every_n:
+                steer, accel = self.engine.get_action(state)
+                if not math.isfinite(steer) or not math.isfinite(accel):
+                    raise ValueError("Policy returned non-finite action")
+                self._held_action = (steer, accel)
+                self._ticks_since_decision = 0
+            else:
+                steer, accel = self._held_action
+            self._ticks_since_decision += 1
 
             cmd = self.control_mapper.map_to_ackermann(steer, accel, speed_mps, dt=dt)
         except Exception as exc:  # pylint: disable=broad-except

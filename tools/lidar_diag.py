@@ -14,7 +14,7 @@ from sac_driver.lidar_converter import LidarConverter, build_lidar_angles
 from sac_driver.state_builder import StateBuilder
 from sac_driver.inference_engine import InferenceEngine
 
-MODEL = os.path.join(WS_ROOT, 'src', 'sac_driver', 'weights', 'session_car_1_3.pth')
+MODEL = os.path.join(WS_ROOT, 'src', 'sac_driver', 'weights', 'session_car_1_2_policy.pth')
 
 angles_450 = build_lidar_angles(0.5, 2.0)
 

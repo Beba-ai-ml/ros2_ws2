@@ -219,41 +219,45 @@ Notes:
 A ROS2 node that runs the trained SAC policy in real time on the Jetson CPU.
 
 ```
- ROS2 Topics (async)        Timer (30Hz)              VESC
+ ROS2 Topics (async)        Timer (60Hz tick)         VESC
 +--------------+         +------------------+    +------------+
-| /scan        |--> scan |                  |    |            |
-| /odom        |--> speed|  _on_timer():    |    |  /drive    |
-|              |--> accel|  1. LidarConv    |--->| (Ackermann |
-|              |--> yaw  |  2. StateBuilder |    |  Drive)    |
-| /servo       |--> servo|  3. NN inference |    |            |
-| /autonomy    |--> lock |  4. ControlMap   |    +------------+
-|  _lock       |         |                  |
+| /scan        |--> scan |  _on_timer():    |    |            |
+| /odom        |--> speed|  1. LidarConv    |    |  /drive    |
+|              |--> accel|  2. StateBuilder |--->| (Ackermann |
+|              |--> yaw  |  3. NN every 8th |    |  Drive)    |
+| /autonomy    |--> lock |     tick (7.5Hz) |    |            |
+|  _lock       |         |  4. ControlMap   |    +------------+
 +--------------+         +------------------+
 ```
 
 ### How it works
 
-1. **Lidar Converter** — extracts 450 angles from the RPLiDAR scan using variable-resolution
-   stepping (0.5° front hemisphere, 2.0° rear hemisphere), applies `lidar.angle_offset_deg`
-   with wrapping to [-pi, pi), and normalizes distances to [0, 1] (max 20 m). Interpolates
-   between adjacent scan indices.
+The pipeline mirrors the training simulator ([occupancy-racer-sac2](https://github.com/Beba-ai-ml/occupancy-racer-sac2)
+`racer_env.py` / `vehicle.py`) step by step; `src/sac_driver/test/test_sim_parity.py` checks
+the parts that can be checked offline (`python3 test/test_sim_parity.py` inside `src/sac_driver`).
 
-2. **State Builder** — builds a 455-element observation vector per frame:
+1. **Lidar Converter** — extracts the same 450 angles the simulator casts (0.5° steps over
+   0°-180°, 2.0° over the rear), maps simulator angles to the ROS scan frame
+   (sim 90° = forward, sim 0° = the side a positive steer turns to; `angle_direction -1`,
+   `angle_offset_deg -90`), normalizes distances to [0, 1] (max 20 m), interpolates.
+
+2. **State Builder** — builds the 455-element observation exactly like `_build_observation`:
    - `[0-449]` — 450 lidar rays (distance / 20.0, clipped [0,1])
-   - `[450]` — speed (normalized by `state.max_speed_mps`, [0,1])
-   - `[451]` — steering position (servo centered to [-1,1])
-   - `[452]` — acceleration feedback (previous NN action, raw [-1,1])
-   - `[453]` — linear acceleration (derived from odom speed delta, [-1,1])
-   - `[454]` — angular velocity (from odom twist, [-1,1])
+   - `[450]` — collision flag (always 0 while driving)
+   - `[451]` — speed (|v| / `state.max_speed_mps` = 2.5, the training physics max speed)
+   - `[452]` — steering feedback: our last policy-space steer command mapped to [0,1], 0.5 = straight
+   - `[453]` — linear acceleration (odom speed delta / 4.0, [-1,1])
+   - `[454]` — angular velocity (odom twist / 3.0, [-1,1])
 
-   Maintains a sliding window of 4 frames → **1820-float state vector**.
+   A frame is pushed every 60 Hz tick; the last 4 ticks → **1820-float state vector**.
 
 3. **Inference Engine** — runs the `GaussianPolicy` network (hidden layers [512, 512, 256])
-   on CPU under `torch.no_grad()`. Input 1820 floats → steering in [-1,1], acceleration in
-   [0,2]. ~5-6 ms per step.
+   on CPU under `torch.no_grad()` every 8th tick (simulator `action_repeat`), holding the
+   action in between. Input 1820 floats → steering in [-1,1], acceleration in [0,2].
 
-4. **Control Mapper** — maps the NN output to physical Ackermann commands with rate limiting,
-   speed limiting, safe-mode scaling and configurable sign inversion for sim→real transfer.
+4. **Control Mapper** — maps the NN output to Ackermann commands: speed-dependent steering
+   limit (same curve as the simulator), rate limits, speed cap, safe-mode scaling and the
+   per-car sign flips.
 
 ### Safety features
 
@@ -274,12 +278,12 @@ A ROS2 node that runs the trained SAC policy in real time on the Jetson CPU.
 | Action dim | 2 (steering [-1,1], acceleration [0,2]) |
 | Lidar | 450 rays, variable resolution (0.5° front, 2.0° rear) |
 | Framework | PyTorch 1.13.1, CPU inference, ~5-6 ms/step |
-| Control rate | 30 Hz |
-| Active weights | `src/sac_driver/weights/session_Rybnik_02_1.pth` (Rybnik_02 map) |
-| Previous weights | `src/sac_driver/weights/session_car_1_3.pth` |
+| Control rate | 60 Hz tick, policy every 8th tick (7.5 Hz, like the simulator) |
+| Active weights | `src/sac_driver/weights/session_car_1_2_policy.pth` (R_01 map, final checkpoint, policy only) |
+| Alternative weights | `src/sac_driver/weights/session_car_1_3_final_policy.pth` (R_01 + opponent bot, final) |
 
 Checkpoints are tracked in git and installed into the package share directory by `setup.py`,
-so `model.path` in `driver_params.yaml` is **relative** (`weights/session_Rybnik_02_1.pth`)
+so `model.path` in `driver_params.yaml` is **relative** (`weights/session_car_1_2_policy.pth`)
 and resolves against `<install>/share/sac_driver/`. Absolute paths, `~/...` and
 `package://sac_driver/weights/...` also work.
 
@@ -379,17 +383,18 @@ first time).
 ### `src/sac_driver/config/driver_params.yaml`
 
 ```yaml
-model.path: "weights/session_Rybnik_02_1.pth"   # relative to the package share dir
+model.path: "weights/session_car_1_2_policy.pth"  # relative to the package share dir
 model.device: "cpu"
 model.weights_only: false
 lidar.front_step_deg: 0.5        # variable-resolution lidar (450 rays)
 lidar.rear_step_deg: 2.0
-lidar.angle_offset_deg: 0.0      # 0 deg = forward for the Rybnik/car_1_3 models
+lidar.angle_offset_deg: -90.0    # sim 90 deg = forward -> ROS 0
+lidar.angle_direction: -1.0      # sim 0 deg = positive-steer side -> ROS +90 (left)
 lidar.max_range_m: 20.0
 state.stack_frames: 4
-state.max_speed_mps: 6.0
-state.servo_norm_offset: -0.535  # servo centered to [-1, 1]
-state.servo_norm_divisor: 0.435
+state.max_speed_mps: 2.5         # training physics max_speed
+control.rate_hz: 60.0            # sim frame
+control.decision_every_n: 8      # sim action_repeat
 control.speed_sign: -1.0         # positive speed = reverse on this car
 control.steer_sign: 1.0
 control.speed_limit_mps: 2.0

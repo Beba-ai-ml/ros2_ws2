@@ -5,50 +5,72 @@ sac_driver:
     # as a fallback when the package has not been rebuilt yet.
     # Absolute paths ("/abs/x.pth"), "~/x.pth" and
     # "package://sac_driver/weights/x.pth" are also supported.
-    model.path: "weights/session_Rybnik_02_1.pth"
+    #
+    # Policy-only exports of the FINAL checkpoints from the PC
+    # (occupancy_racer/Soft_Actor_Critic_2/runs/<session>/<session>.pth):
+    #   weights/session_car_1_2_policy.pth       - R_01 map, best mean_100 220 m
+    #   weights/session_car_1_3_final_policy.pth - R_01 map + opponent bot, 8750 ep
+    # Both trained 22-29.03.2026 with physics max_speed 2.5 m/s, 450-ray lidar,
+    # stack 4, action_repeat 8 @ 60 fps.
+    model.path: "weights/session_car_1_2_policy.pth"
     model.device: "cpu"
     model.weights_only: false
 
-    # 450-ray variable-resolution lidar (front 0.5deg, rear 2.0deg)
+    # 450-ray variable-resolution lidar (front 0.5deg, rear 2.0deg), same
+    # generator as the simulator: index 0 = angle 0deg, index 180 = 90deg,
+    # index 360 = 180deg, then the rear hemisphere every 2deg.
     lidar.front_step_deg: 0.5
     lidar.rear_step_deg: 2.0
     lidar.max_range_m: 20.0
-    lidar.angle_offset_deg: 0.0
-    lidar.angle_direction: 1.0
+    # Simulator convention: 90deg = FORWARD, 0deg = the side the car turns to
+    # on a POSITIVE steer action, 180deg = the other side.
+    # ROS LaserScan: 0 rad = forward, +90deg = LEFT, positive steering = LEFT.
+    # Hence sim angle a -> scan angle (90 - a) deg: direction -1, offset -90.
+    # (The old 0.0 / +1.0 pair fed the network a scan rotated by 90deg.)
+    # CALIBRATION: re-run the cardboard test (left AND right, not only front)
+    # after any change here - see docs/TROUBLESHOOTING.md.
+    lidar.angle_offset_deg: -90.0
+    lidar.angle_direction: -1.0
     lidar.use_interpolation: true
 
     state.stack_frames: 4
-    state.max_speed_mps: 6.0
-    # Servo normalization: (raw + offset) / divisor -> [-1, 1] centered at 0
-    state.servo_norm_divisor: 0.435
-    state.servo_norm_offset: -0.535
-    state.servo_default: 0.0
+    # Speed normalisation divisor = physics max_speed the policy was trained
+    # with (config/physics.yaml on the PC at 22-29.03.2026: 2.5 m/s).
+    state.max_speed_mps: 2.5
     state.speed_default: 0.0
-    state.collision_default: 0.0
     state.max_accel_mps2: 4.0
     state.max_yaw_rate_rad_s: 3.0
 
-    control.rate_hz: 30.0
+    # Timing = simulator: tick 60 Hz (sim frame), stack pushed every tick,
+    # policy queried every 8 ticks (action_repeat 8 -> 7.5 Hz), action held
+    # in between. The lidar (~8-10 Hz) is simply re-used between scans.
+    control.rate_hz: 60.0
+    control.decision_every_n: 8
+    control.default_dt: 0.01667
+    # Steering limit vs speed, same curve as the simulator (vehicle.py):
+    # limit = max + (min - max) * (|v| / ref)^2.
     control.max_steering_angle_deg: 20.0
-    control.max_speed_mps: 6.0
+    control.min_steering_angle_deg: 5.0
+    control.steer_speed_ref_mps: 8.0
+    control.max_speed_mps: 2.5
     control.max_accel_mps2: 2.0
     control.speed_limit_mps: 2.0
-    control.steer_rate_limit_deg_s: 90.0
-    control.accel_rate_limit_mps2: 3.0
+    control.steer_rate_limit_deg_s: 120.0
+    control.accel_rate_limit_mps2: 18.0
     control.safe_mode: true
     control.safe_speed_limit_mps: 2.0
     control.safe_steer_scale: 1.0
     control.safe_accel_scale: 1.0
     control.wheelbase_m: 0.35
     control.max_yaw_rate_rad_s: 2.5
-    control.default_dt: 0.033
+    # Per-car wiring: positive drive.speed = REVERSE on this car.
     control.speed_sign: -1.0
+    # Positive policy steer must turn LEFT (pairs with lidar direction/offset).
     control.steer_sign: 1.0
     control.enable_on_start: false
 
     topics.scan: "/scan"
     topics.odom: "/odom"
-    topics.servo: "/commands/servo/position"
     topics.cmd: "/drive"
     topics.emergency_stop: "/autonomy_lock"
     topics.enable_service: "/sac_driver/enable"

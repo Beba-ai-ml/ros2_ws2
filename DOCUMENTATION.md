@@ -24,16 +24,15 @@
 
 ### `sac_driver_node.py` — Main ROS2 Node
 
-The central orchestrator. Subscribes to sensor topics, runs the inference pipeline at 30Hz, and publishes drive commands.
+The central orchestrator. Subscribes to sensor topics, ticks at 60 Hz (one simulator frame), queries the policy every 8th tick (simulator `action_repeat`) and publishes drive commands.
 
 | Element | Description |
 |---------|-------------|
 | `class SACDriverNode(Node)` | Main ROS2 node |
 | `_on_scan(msg)` | Callback for `/scan` (LaserScan). Stores latest lidar ranges. |
 | `_on_odom(msg)` | Callback for `/odom` (Odometry). Extracts speed, yaw rate. Computes linear acceleration from speed delta/dt. |
-| `_on_servo(msg)` | Callback for `/commands/servo/position` (Float64). Stores servo position. |
 | `_on_estop(msg)` | Callback for `/autonomy_lock` (Bool). Enables/disables driving. Logs state transitions. |
-| `_on_timer()` | 30Hz timer. Builds state → runs inference → publishes `/drive`. Guards: checks data readiness and autonomy lock. |
+| `_on_timer()` | 60 Hz tick. Builds state and pushes it on the 4-frame stack every tick; runs inference every `control.decision_every_n` ticks and holds the action in between; publishes `/drive` every tick. Guards: data readiness and autonomy lock. |
 | `_data_ready()` | Returns True when scan + odom data are available. |
 | `_publish_stop()` | Publishes zero-speed Ackermann command. Rate-limited to avoid log spam. |
 
@@ -43,7 +42,6 @@ The central orchestrator. Subscribes to sensor topics, runs the inference pipeli
 |-------|------|-----|------|
 | `/scan` | `sensor_msgs/LaserScan` | RELIABLE (10) | ~8 Hz |
 | `/odom` | `nav_msgs/Odometry` | RELIABLE (10) | ~50 Hz |
-| `/commands/servo/position` | `std_msgs/Float64` | RELIABLE (10) | On command |
 | `/autonomy_lock` | `std_msgs/Bool` | RELIABLE (10) | 50 Hz |
 
 **Publications:**
@@ -85,7 +83,8 @@ Builds the 1820-float state vector from sensor data.
 |---------|-------------|
 | `class StateBuilder` | Maintains a deque of 4 frames |
 | `__init__(stack_frames, lidar_dim, max_speed, ...)` | Configures normalization parameters |
-| `update(lidar, speed, steer, accel_fb, accel, yaw)` | Creates one 455-float frame, appends to stack, returns concatenated state |
+| `build_observation(lidar, speed, steer_cmd_norm, accel, yaw)` | One 455-float frame in the simulator's layout |
+| `update(lidar, speed, steer_cmd_norm, accel, yaw)` | Builds a frame, appends it to the stack, returns the concatenated state |
 | `reset(first_obs)` | Clears deque and fills with first_obs |
 | `single_obs_dim` | Property: lidar_dim + 5 = 455 |
 | `state_dim` | Property: 455 x 4 = 1820 |
@@ -95,9 +94,9 @@ Builds the 1820-float state vector from sensor data.
 | Index | Feature | Normalization |
 |-------|---------|---------------|
 | 0-449 | 450 lidar distances | distance / 20.0, clipped [0,1] |
-| 450 | Speed | abs(speed) / max_speed, [0,1] |
-| 451 | Steering | servo centered, [-1,1] |
-| 452 | Accel feedback | previous NN accel (raw), [-1,1] |
+| 450 | Collision flag | 0/1 in training, always 0 on the car |
+| 451 | Speed | abs(speed) / max_speed (2.5), [0,1] |
+| 452 | Steering feedback | (last policy-space steer command + 1) / 2, [0,1], 0.5 = straight |
 | 453 | Linear acceleration | accel / max_accel, clamped [-1,1] |
 | 454 | Angular velocity | yaw / max_yaw_rate, clamped [-1,1] |
 
@@ -132,11 +131,12 @@ Builds the 1820-float state vector from sensor data.
 |---------|-------------|
 | `class ControlMapper` | Maps [-1,1] NN output to physical commands |
 | `__init__(max_steering_deg, speed_limit, speed_sign, steer_sign, ...)` | Configures limits, signs, rate limiting |
-| `map(steer_raw, accel_raw)` | Returns `AckermannDriveStamped`. Applies: sign inversion, angle scaling, speed limiting, rate limiting, safe mode scaling. |
+| `map_to_ackermann(steer_raw, accel_raw, current_speed, dt)` | Returns steering_angle / speed / acceleration. Applies: sign inversion, speed-dependent steering limit (`steer_limit_rad`, simulator curve), safe mode scaling, rate limiting, speed integration and cap. |
+| `last_steer_norm` | Last commanded steer mapped back to policy space, fed to the next observation |
 
 **Key parameters:**
 - `speed_sign`, `steer_sign`: -1.0 for sim→real inversion
-- `max_steering_angle_deg`: Physical servo limit (20deg)
+- `max_steering_angle_deg` / `min_steering_angle_deg` / `steer_speed_ref_mps`: steering limit 20° at 0 m/s falling to 5° at 8 m/s (simulator `vehicle.py`)
 - `speed_limit_mps`: Maximum allowed speed (2.0 m/s default)
 - `safe_mode`: Enables additional scaling factors
 
@@ -146,34 +146,33 @@ Builds the 1820-float state vector from sensor data.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `model.path` | string | `"weights/session_Rybnik_02_1.pth"` | Checkpoint path. Relative paths resolve against the package share dir (`install/sac_driver/share/sac_driver/`), falling back to the source tree. Absolute, `~/...` and `package://sac_driver/...` also work. |
+| `model.path` | string | `"weights/session_car_1_2_policy.pth"` | Checkpoint path (policy-only state_dict or full `sac_checkpoint_v1`). Relative paths resolve against the package share dir (`install/sac_driver/share/sac_driver/`), falling back to the source tree. Absolute, `~/...` and `package://sac_driver/...` also work. |
 | `model.device` | string | `"cpu"` | PyTorch device |
 | `model.weights_only` | bool | `false` | torch.load weights_only flag |
 | `lidar.front_step_deg` | float | `0.5` | Front hemisphere angular step (0 = use angles_deg list) |
 | `lidar.rear_step_deg` | float | `2.0` | Rear hemisphere angular step (0 = use angles_deg list) |
 | `lidar.angles_deg` | float[] | 27 angles | Explicit target angles (overridden when front/rear step > 0) |
-| `lidar.angle_offset_deg` | float | `0.0` | Lidar frame offset. `0.0` for the current 450-ray models (0 deg = forward); `-90.0` for the old 27-ray model. |
-| `lidar.angle_direction` | float | `1.0` | Direction of increasing lidar angle (`-1.0` to mirror) |
+| `lidar.angle_offset_deg` | float | `-90.0` | Simulator angle → ROS scan angle = `direction * (a + offset)`. The simulator has 90° = forward, so `-90` puts sim "forward" at ROS 0. |
+| `lidar.angle_direction` | float | `-1.0` | `-1` because sim 0° is the positive-steer side = ROS +90° (left). Pairs with `control.steer_sign`. |
 | `lidar.max_range_m` | float | `20.0` | Max lidar range for normalization |
 | `lidar.use_interpolation` | bool | `true` | Interpolate between scan indices |
-| `state.stack_frames` | int | `4` | Number of frames to stack |
-| `state.max_speed_mps` | float | `6.0` | Speed normalization divisor |
+| `state.stack_frames` | int | `4` | Number of frames to stack (one per 60 Hz tick) |
+| `state.max_speed_mps` | float | `2.5` | Speed normalization divisor = training physics `max_speed` |
 | `state.max_accel_mps2` | float | `4.0` | Acceleration normalization divisor |
 | `state.max_yaw_rate_rad_s` | float | `3.0` | Yaw rate normalization divisor |
-| `state.servo_norm_divisor` | float | `0.435` | Servo normalization divisor (for [-1,1] centered) |
-| `state.servo_norm_offset` | float | `-0.535` | Servo normalization offset |
-| `state.servo_default` | float | `0.0` | Default servo value (0 = center in [-1,1]) |
-| `control.rate_hz` | float | `30.0` | Control loop frequency |
+| `control.rate_hz` | float | `60.0` | Tick frequency (= simulator fps) |
+| `control.decision_every_n` | int | `8` | Policy queried every N ticks (= simulator `action_repeat`), action held in between |
 | `control.enable_on_start` | bool | `false` | Auto-enable on node start |
 | `control.speed_sign` | float | `-1.0` | Speed direction flip |
-| `control.steer_sign` | float | `1.0` | Steering direction flip (pairs with `lidar.angle_offset_deg`) |
-| `control.max_steering_angle_deg` | float | `20.0` | Max steering angle |
+| `control.steer_sign` | float | `1.0` | Steering direction flip (pairs with `lidar.angle_direction`) |
+| `control.max_steering_angle_deg` | float | `20.0` | Max steering angle at 0 m/s |
+| `control.min_steering_angle_deg` | float | `5.0` | Steering limit at `steer_speed_ref_mps` (sim curve `max + (min-max)*(v/ref)^2`) |
+| `control.steer_speed_ref_mps` | float | `8.0` | Reference speed of the steering curve |
 | `control.speed_limit_mps` | float | `2.0` | Speed cap |
 | `control.safe_mode` | bool | `true` | Enable safe mode scaling |
 | `safety.watchdog_timeout_sec` | float | `0.5` | Data timeout before stop |
 | `topics.scan` | string | `"/scan"` | Lidar topic |
 | `topics.odom` | string | `"/odom"` | Odometry topic |
-| `topics.servo` | string | `"/commands/servo/position"` | Servo topic |
 | `topics.cmd` | string | `"/drive"` | Output drive topic |
 | `topics.emergency_stop` | string | `"/autonomy_lock"` | Deadman switch topic |
 | `topics.enable_service` | string | `"/sac_driver/enable"` | Enable/disable service name |

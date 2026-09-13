@@ -20,7 +20,7 @@ def _default_paths():
     params = os.path.join(pkg_share, "config", "driver_params.yaml")
     # Checkpoints are installed into <pkg_share>/weights by setup.py, so the
     # default works on any machine/user. Override with model_path:=<path>.
-    model = os.path.join(pkg_share, "weights", "session_Rybnik_02_1.pth")
+    model = os.path.join(pkg_share, "weights", "session_car_1_2_policy.pth")
     return params, model
 
 
@@ -33,7 +33,6 @@ def generate_launch_description() -> LaunchDescription:
 
     scan_topic = LaunchConfiguration("scan_topic")
     odom_topic = LaunchConfiguration("odom_topic")
-    servo_topic = LaunchConfiguration("servo_topic")
     cmd_topic = LaunchConfiguration("cmd_topic")
     estop_topic = LaunchConfiguration("estop_topic")
     enable_service = LaunchConfiguration("enable_service")
@@ -45,7 +44,6 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("namespace", default_value=""),
             DeclareLaunchArgument("scan_topic", default_value="/scan"),
             DeclareLaunchArgument("odom_topic", default_value="/odom"),
-            DeclareLaunchArgument("servo_topic", default_value="/commands/servo/position"),
             DeclareLaunchArgument("cmd_topic", default_value="/drive"),
             DeclareLaunchArgument("estop_topic", default_value="/autonomy_lock"),
             DeclareLaunchArgument("enable_service", default_value="/sac_driver/enable"),
@@ -61,7 +59,6 @@ def generate_launch_description() -> LaunchDescription:
                         "model.path": model_path,
                         "topics.scan": scan_topic,
                         "topics.odom": odom_topic,
-                        "topics.servo": servo_topic,
                         "topics.cmd": cmd_topic,
                         "topics.emergency_stop": estop_topic,
                         "topics.enable_service": enable_service,

@@ -120,14 +120,13 @@ this car — the restart cycle is not fully reliable.
 
 ## `sac_driver` prints "waiting for data" forever
 
-**Symptom.** Repeated `Waiting for data: scan=False odom=... servo=...`.
+**Symptom.** Repeated `Waiting for data: scan=False odom=...`.
 
 **Checks.** For each `False`, confirm the producing node is alive and the topic is publishing:
 
 ```bash
 ros2 topic hz /scan
 ros2 topic hz /odom
-ros2 topic echo /commands/servo/position
 ```
 
 ### BEST_EFFORT QoS drops (the classic)
@@ -138,16 +137,10 @@ Symptom: `scan=False` while `/scan` clearly has publishers and `ros2 topic hz /s
 messages. Every subscription in `sac_driver_node.py` uses plain QoS depth 10 (RELIABLE) — keep
 it that way.
 
-### Servo data blocks startup
+### Servo data no longer needed
 
-`/commands/servo/position` is only published when the car is actually being driven. `_data_ready()`
-requires servo data when the servo subscription exists, so a freshly started node can wait
-forever until someone drives manually once. Workarounds: nudge the car with the gamepad or
-`key_drive.py` for a moment, or publish one message by hand:
-
-```bash
-ros2 topic pub -1 /commands/servo/position std_msgs/msg/Float64 "{data: 0.5304}"
-```
+Since 2026-09-13 the node does not subscribe to `/commands/servo/position` (steering feedback
+is its own last command, like the simulator), so `_data_ready()` waits only for `/scan` and `/odom`.
 
 ### `_publish_stop` hides transitions
 
@@ -195,12 +188,28 @@ copied there by `setup.py` at build time — after adding a new `.pth`, rebuild:
 colcon build --packages-select sac_driver
 ```
 
-## Car steers into obstacles instead of away
+## Car steers into obstacles instead of away / turns for no reason
 
-The lidar frame convention does not match the model. Change `lidar.angle_offset_deg` (`0.0` for
-the current models, `-90.0` for the old 27-ray one) and re-check `control.steer_sign` — a 90°
-offset change flips the effective steering direction. Verify with the cardboard test described
-in [SETUP_NEW_JETSON.md](SETUP_NEW_JETSON.md), wheels off the ground.
+The lidar frame convention must match the simulator the policy was trained in:
+sim angle 90° = forward, sim 0° = the side the car turns to on a positive steer. In ROS that is
+`lidar.angle_offset_deg: -90.0`, `lidar.angle_direction: -1.0`, `control.steer_sign: 1.0`
+(derived from `racer_env.py`; the offline check is `src/sac_driver/test/test_sim_parity.py`).
+
+**Cardboard test, wheels off the ground — front alone is NOT enough** (a 90° rotated frame also
+"avoids" a frontal obstacle, that is how the wrong `offset 0` passed in March 2026):
+
+1. Raw frame: `python3 ros2_panel/scan_test.py`. Cardboard 0.5 m in FRONT of the lidar →
+   closest point at ≈ 0°; on the car's LEFT → ≈ +90°. If the front shows up at ±90° or 180°
+   the lidar is mounted rotated: shift `lidar.angle_offset_deg` by that amount and fix the
+   static `base_link -> laser` yaw in `bringup_launch3.py`.
+2. Model frame: with the AI node running, cardboard in FRONT must give the minimum of the
+   450-ray vector at index 180 (sim 90°), on the LEFT at index 0, on the RIGHT at index 360.
+3. Behaviour (hold RB): cardboard ahead-LEFT → wheels turn RIGHT
+   (`/commands/servo/position` above 0.53); ahead-RIGHT → wheels turn LEFT. If both are
+   mirrored while steps 1-2 pass, the servo gain sign in `vesc.yaml` is wrong (a positive
+   `steering_angle` must turn the wheels LEFT, otherwise `/odom` yaw is mirrored too): negate
+   `steering_angle_to_servo_gain`, re-center the offset, re-test. Do NOT just flip
+   `control.steer_sign` - that would leave the yaw feedback channel mirrored.
 
 ## Car drives backwards
 
