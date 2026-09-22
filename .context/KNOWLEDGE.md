@@ -109,12 +109,12 @@ Max range 20 m (sim `LIDAR_MAX_RANGE_M`). Interpolation enabled. Invalid/inf rea
 Policy-only exports (`weights/*_policy.pth`, ~5 MB, legacy torch serialization so torch 1.13
 on the Jetson reads them) of the FINAL checkpoints on the PC
 (`~/occupancy_racer/Soft_Actor_Critic_2/runs/<session>/<session>.pth`):
-- **Active:** `weights/session_car_1_2_policy.pth` — R_01 map, 1884 episodes, best mean_100
-  220 m (train CSV), total_steps 269 020
-- **Alternative:** `weights/session_car_1_3_final_policy.pth` — R_01 + OpponentBot, 8750
-  episodes, best mean_100 183 m, total_steps 866 051
-- Both: 450-ray lidar, stack 4, action_repeat 8 @ 60 fps, physics `max_speed 2.5`,
-  `max_steer 20°`, `steer_speed_ref 8`, wheelbase 0.27 m (DR 0.85-1.15), trained 22-29.03.2026
+- **Active:** `weights/session_Sesja_mpo2_2_policy.pth` — policy-only export of the final
+  `Sesja_mpo2_2` checkpoint, `mpo2`, 7,131 episodes, peak mean_100 195 m, max episode 256.6 m.
+- **Alternatives:** `weights/session_car_1_2_policy.pth` — R_01, peak mean_100 220 m — and
+  `weights/session_car_1_3_final_policy.pth` — R_01 + OpponentBot, peak mean_100 183 m.
+- All three are 450-ray policies with state 1820, stack 4 and action_repeat 8 @ 60 fps; the
+  mpo2 source run used the same 2.5 m/s training physics and the export is readable by torch 1.13.
 - **Removed 2026-09-13:** `session_Rybnik_02_1.pth` (snapshot at 122k of 795k steps; weakest
   session of the family, mean_100 65 m) and `session_car_1_3.pth` (snapshot at episode 5250).
 - **Architecture:** GaussianPolicy MLP [512, 512, 256], action_dim=2
@@ -125,7 +125,7 @@ on the Jetson reads them) of the FINAL checkpoints on the PC
 
 ## Model Path Resolution
 `model.path` is resolved by `_resolve_path` in `sac_driver_node.py`:
-- relative (e.g. `weights/session_Rybnik_02_1.pth`) → `<install>/share/sac_driver/`, with the
+- relative (e.g. `weights/session_Sesja_mpo2_2_policy.pth`) → `<install>/share/sac_driver/`, with the
   source tree `src/sac_driver/` as a fallback when the package has not been rebuilt yet
 - absolute paths, `~/...`, and `package://sac_driver/weights/...` also work
 - override at launch: `ros2 launch sac_driver sac_driver.launch.py model_path:=/abs/x.pth`
@@ -183,7 +183,7 @@ it to land in the share dir.
 - **Board:** NVIDIA Jetson Orin Nano Super Developer Kit (aarch64), JetPack 5.1.5 / L4T R35.6.1, Ubuntu 20.04.6, 25 W power mode
 - **ROS2:** Foxy from apt (EOL but functional)
 - **Python:** 3.8.10, PyTorch 1.13.1 (CPU wheel from PyPI, pip `--user`), numpy 1.24.4
-- CUDA 11.4 is installed but **inference is CPU-only** (~5-6 ms/step, 30 Hz budget is 33 ms)
+- CUDA 11.4 is installed but **inference is CPU-only** (~5-6 ms/decision, 60 Hz tick budget is 16 ms)
 - **Hardware:** SLAMTEC RPLiDAR S1 (256000 baud), VESC 6 (HW60, FW 6.02), Logitech F710 gamepad, 7x WS2812B on SPI1, optional GPIO shutdown button
 - **Panel:** GTK3 Python app in `ros2_panel/`
 - **Install:** `./install.sh` (see README/docs/SETUP_NEW_JETSON.md); Python deps in `requirements.txt`

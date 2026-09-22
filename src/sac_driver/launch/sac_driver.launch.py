@@ -20,7 +20,7 @@ def _default_paths():
     params = os.path.join(pkg_share, "config", "driver_params.yaml")
     # Checkpoints are installed into <pkg_share>/weights by setup.py, so the
     # default works on any machine/user. Override with model_path:=<path>.
-    model = os.path.join(pkg_share, "weights", "session_car_1_2_policy.pth")
+    model = os.path.join(pkg_share, "weights", "session_Sesja_mpo2_2_policy.pth")
     return params, model
 
 

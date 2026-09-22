@@ -1,7 +1,9 @@
 # HANDOFF 13.09.2026 - naprawa zgodności sim↔auto (gałąź `fix/sim-parity-20260913`)
 
-Dla Wojtka i dla następnej sesji agenta. Stan na 13.09.2026 wieczór. Co zrobiono, co czeka, co
-zdecydowano. Dowody na każdy punkt: `.context/review-jazda-ai-20260913.md` (plik:linia w simie i na aucie).
+Dla Wojtka i dla następnej sesji agenta. Ten handoff opisuje naprawę z 13.09.2026; bieżący
+domyślny model został później przełączony na `session_Sesja_mpo2_2_policy.pth` (stan bieżący
+jest w `.context/STATE.md`). Co zrobiono, co czeka, co zdecydowano. Dowody na każdy punkt:
+`.context/review-jazda-ai-20260913.md` (plik:linia w simie i na aucie).
 
 ## Skąd się wzięło
 Wojtek: „w symulacji działa perfekcyjnie, na aucie robi duże dziwne rzeczy". Review 13.09 znalazł, że
@@ -22,8 +24,9 @@ HEAD `5b59934` = GitHub `occupancy-racer-sac2`). Cztery twarde rozjazdy, każdy 
   z własnej ostatniej komendy (`ControlMapper.last_steer_norm`); subskrypcja `/commands/servo/position` usunięta,
   `_data_ready` czeka tylko na `/scan` i `/odom`.
 - `control_mapper.py`: limit skrętu zależny od prędkości jak `vehicle.py` w simie; `last_steer_norm`.
-- Wagi: `weights/session_car_1_2_policy.pth` (domyślny, R_01, best mean_100 220 m) i
-  `weights/session_car_1_3_final_policy.pth` (R_01 + bot, 8750 epizodów). Sama polityka, ~5 MB, format legacy
+- Wagi w czasie tego historycznego handoffu: `weights/session_car_1_2_policy.pth` (R_01,
+  best mean_100 220 m) i `weights/session_car_1_3_final_policy.pth` (R_01 + bot, 8750 epizodów).
+  Bieżący default jest opisany wyżej i w `.context/STATE.md`. Sama polityka, ~5 MB, format legacy
   torch (czytelny dla torch 1.13 na Jetsonie). Źródło: `Soft_Actor_Critic_2/runs/<sesja>/<sesja>.pth` (finalne).
   Stare `session_Rybnik_02_1.pth` i `session_car_1_3.pth` (migawka epizodu 5250) usunięte z repo (są w historii gita).
 - Test offline `src/sac_driver/test/test_sim_parity.py` (bez ROS): 15/15 na nowym kodzie, 12/15 czerwone na
@@ -43,8 +46,9 @@ HEAD `5b59934` = GitHub `occupancy-racer-sac2`). Cztery twarde rozjazdy, każdy 
      Lustrzanie przy zaliczonych 1-2 = zły znak `steering_angle_to_servo_gain` w `vesc.yaml` (dodatni kąt musi
      skręcać w lewo, inaczej yaw z `/odom` też jest lustrzany). NIE naprawiać tego samym `steer_sign`.
   Test tylko z przodu nic nie dowodzi - tak marcowy „test kartonem" przepuścił obrót o 90°.
-- [ ] **H3. Pierwsza jazda po ziemi** przy `control.speed_limit_mps 2.0` na `session_car_1_2_policy.pth`; potem
-  porównanie z `session_car_1_3_final_policy.pth` (przełączenie: `model.path` w `driver_params.yaml` albo
+- [ ] **H3. Pierwsza jazda po ziemi** przy `control.speed_limit_mps 2.0` na bieżącym
+  `session_Sesja_mpo2_2_policy.pth`; R_01 można porównać przez `session_car_1_2_policy.pth` (przełączenie:
+  `model.path` w `driver_params.yaml` albo
   `ros2 launch sac_driver sac_driver.launch.py model_path:=...`).
 - [ ] **H4. Po udanej jeździe: scalić gałąź do `main`** (PR: https://github.com/Beba-ai-ml/ros2_ws2/pull/new/fix/sim-parity-20260913)
   i dopisać wynik do `.context/STATE.md` (czerwony blok na górze zdjąć).

@@ -6,13 +6,13 @@ sac_driver:
     # Absolute paths ("/abs/x.pth"), "~/x.pth" and
     # "package://sac_driver/weights/x.pth" are also supported.
     #
-    # Policy-only exports of the FINAL checkpoints from the PC
+    # Policy-only export of the FINAL mpo2 checkpoint from the PC
     # (occupancy_racer/Soft_Actor_Critic_2/runs/<session>/<session>.pth):
-    #   weights/session_car_1_2_policy.pth       - R_01 map, best mean_100 220 m
-    #   weights/session_car_1_3_final_policy.pth - R_01 map + opponent bot, 8750 ep
-    # Both trained 22-29.03.2026 with physics max_speed 2.5 m/s, 450-ray lidar,
-    # stack 4, action_repeat 8 @ 60 fps.
-    model.path: "weights/session_car_1_2_policy.pth"
+    #   weights/session_Sesja_mpo2_2_policy.pth - mpo2, peak mean_100 195 m,
+    #   7,131 episodes, 450-ray lidar, stack 4, action_repeat 8 @ 60 fps.
+    # Alternatives kept in the repo: session_car_1_2_policy.pth (R_01, 220 m),
+    # session_car_1_3_final_policy.pth (R_01 + opponent bot, 183 m).
+    model.path: "weights/session_Sesja_mpo2_2_policy.pth"
     model.device: "cpu"
     model.weights_only: false
 

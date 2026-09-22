@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""Diagnose lidar-to-NN mapping. Tests different offset and channel configs."""
-import math, os, time, sys
-import numpy as np
+"""Diagnose lidar-to-NN mapping using the current 450-ray observation layout."""
+import math, os, sys
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
@@ -14,15 +13,15 @@ from sac_driver.lidar_converter import LidarConverter, build_lidar_angles
 from sac_driver.state_builder import StateBuilder
 from sac_driver.inference_engine import InferenceEngine
 
-MODEL = os.path.join(WS_ROOT, 'src', 'sac_driver', 'weights', 'session_car_1_2_policy.pth')
+MODEL = os.path.join(WS_ROOT, 'src', 'sac_driver', 'weights', 'session_Sesja_mpo2_2_policy.pth')
 
 angles_450 = build_lidar_angles(0.5, 2.0)
 
-# Test 3 offset configurations
+# Test offset choices while keeping the simulator's mirrored angle direction.
 CONFIGS = {
-    'offset=-90': LidarConverter(angles_450, max_range_m=20.0, angle_offset_deg=-90.0),
-    'offset=  0': LidarConverter(angles_450, max_range_m=20.0, angle_offset_deg=0.0),
-    'offset=+90': LidarConverter(angles_450, max_range_m=20.0, angle_offset_deg=90.0),
+    'production -90': LidarConverter(angles_450, max_range_m=20.0, angle_offset_deg=-90.0, angle_direction=-1.0),
+    'offset=  0': LidarConverter(angles_450, max_range_m=20.0, angle_offset_deg=0.0, angle_direction=-1.0),
+    'offset=+90': LidarConverter(angles_450, max_range_m=20.0, angle_offset_deg=90.0, angle_direction=-1.0),
 }
 
 class Diag(Node):
@@ -75,28 +74,20 @@ class Diag(Node):
             front_idx = len(angles_450) // 4  # ~index at 90deg training angle
             front_val = float(lidar[front_idx])
 
-            # Build state with OLD format: [collision=0, speed, servo=0.5, accel, yaw]
-            # AND new format: [speed, steer, accel_fb, accel, yaw]
-            # Test both channel orders
+            # Current layout: [lidar, collision=0, speed/2.5, servo_norm,
+            # linear_accel/4, angular_vel/3]. Start from straight wheels.
+            sb = StateBuilder(stack_frames=4, lidar_dim=450, max_speed_mps=2.5)
+            state = sb.reset(sb.build_observation(lidar, self.speed, 0.0, 0.0, 0.0))
+            steer, accel = self.engine.get_action(state)
 
-            for ch_name, channels in [
-                ('new', [0.0, 0.0, 0.0, 0.0, 0.0]),   # [speed, steer, accel_fb, accel, yaw]
-                ('old', [0.0, 0.0, 0.5, 0.0, 0.0]),    # [collision=0, speed, servo=0.5, accel, yaw]
-            ]:
-                obs = np.array(list(lidar) + channels, dtype=np.float32)
-                sb = StateBuilder(stack_frames=4, lidar_dim=450, max_speed_mps=6.0)
-                state = sb.reset(obs)
-                steer, accel = self.engine.get_action(state)
+            if abs(steer) < 0.05:
+                direction = 'STRAIGHT'
+            elif steer > 0:
+                direction = f'LEFT  ({steer:+.3f})'
+            else:
+                direction = f'RIGHT ({steer:+.3f})'
 
-                if abs(steer) < 0.05:
-                    direction = 'STRAIGHT'
-                elif steer > 0:
-                    direction = f'LEFT  ({steer:+.3f})'
-                else:
-                    direction = f'RIGHT ({steer:+.3f})'
-
-                label = f'{name}/{ch_name}'
-                print(f'  {label:<14s}  {steer:+7.3f}  {accel:7.3f}  {direction:<20s}  {front_val:10.3f}')
+            print(f'  {name:<14s}  {steer:+7.3f}  {accel:7.3f}  {direction:<20s}  {front_val:10.3f}')
 
 def main():
     rclpy.init()

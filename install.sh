@@ -36,7 +36,7 @@ KEY_DRIVE_SERVICE_SRC="${WS}/system/systemd/key_drive.service.in"
 BT_PAD_SERVICE_SRC="${WS}/system/systemd/bt_pad.service.in"
 DESKTOP_SRC="${WS}/system/desktop/ROS2-Panel.desktop.in"
 REQUIREMENTS="${WS}/requirements.txt"
-WEIGHTS_FILE="${WS}/src/sac_driver/weights/session_car_1_2_policy.pth"
+WEIGHTS_FILE="${WS}/src/sac_driver/weights/session_Sesja_mpo2_2_policy.pth"
 RANGE_LIBC_PYWRAPPER="${WS}/src/range_libc/pywrapper"
 
 # Packages built by default (everything needed to drive).

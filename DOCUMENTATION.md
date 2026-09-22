@@ -146,7 +146,7 @@ Builds the 1820-float state vector from sensor data.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `model.path` | string | `"weights/session_car_1_2_policy.pth"` | Checkpoint path (policy-only state_dict or full `sac_checkpoint_v1`). Relative paths resolve against the package share dir (`install/sac_driver/share/sac_driver/`), falling back to the source tree. Absolute, `~/...` and `package://sac_driver/...` also work. |
+| `model.path` | string | `"weights/session_Sesja_mpo2_2_policy.pth"` | Checkpoint path (policy-only state_dict or full `sac_checkpoint_v1`). Relative paths resolve against the package share dir (`install/sac_driver/share/sac_driver/`), falling back to the source tree. Absolute, `~/...` and `package://sac_driver/...` also work. |
 | `model.device` | string | `"cpu"` | PyTorch device |
 | `model.weights_only` | bool | `false` | torch.load weights_only flag |
 | `lidar.front_step_deg` | float | `0.5` | Front hemisphere angular step (0 = use angles_deg list) |

@@ -2,7 +2,7 @@
 
 A neural-network-driven autonomous racing vehicle built on ROS2 Foxy and an NVIDIA Jetson Orin Nano. The core of this project is **SAC Driver** — a real-time inference node that runs a trained **Soft Actor-Critic (SAC)** reinforcement learning policy to drive a 1/10th scale RC car using only lidar and odometry.
 
-The SAC agent was trained in simulation with [occupancy-racer-sac2](https://github.com/Beba-ai-ml/occupancy-racer-sac2) and deployed to physical hardware via a modular inference pipeline. The car processes 450 lidar rays (variable resolution: 0.5° front, 2.0° rear) + speed + steering + acceleration feedback + linear acceleration + yaw rate at 30 Hz, stacks 4 frames into a **1820-dimensional state vector**, and outputs continuous steering and throttle commands through a GaussianPolicy network (~1.2M parameters, ~5-6 ms inference on the Jetson CPU).
+The SAC agent was trained in simulation with [occupancy-racer-sac2](https://github.com/Beba-ai-ml/occupancy-racer-sac2) and deployed to physical hardware via a modular inference pipeline. The car processes 450 lidar rays (variable resolution: 0.5° front, 2.0° rear) + collision flag + speed + commanded steering + linear acceleration + yaw rate at a 60 Hz tick, stacks 4 frames into a **1820-dimensional state vector**, and queries the policy every 8th tick (7.5 Hz). The current default is the policy-only export of `Sesja_mpo2_2`, trained on `mpo2` with peak mean_100 195 m.
 
 This repository is self-contained: clone it on a fresh Jetson, run one installer, and the car drives.
 
@@ -22,7 +22,7 @@ This repository is self-contained: clone it on a fresh Jetson, run one installer
 | Shutdown button | Optional GPIO button, BOARD pins 37 (drive) / 38 (sense) — not installed on this car |
 | Chassis | F1TENTH 1/10 scale RC car, wheelbase 0.35 m |
 
-CUDA 11.4 is present on the Jetson, but **inference runs on the CPU** (torch 1.13.1 CPU wheel). The policy needs ~5-6 ms per step, well inside the 33 ms budget of the 30 Hz control loop.
+CUDA 11.4 is present on the Jetson, but **inference runs on the CPU** (torch 1.13.1 CPU wheel). The policy needs ~5-6 ms per decision, well inside the 16 ms budget of the 60 Hz tick.
 
 ### Software
 
@@ -133,8 +133,8 @@ If your car drives forward on a positive speed, flip both to `+1.0`.
 **6. Cardboard steering test.** With the car on the stand and the SAC driver enabled, hold a
 large piece of cardboard close to **one** side of the lidar. The wheels must steer **away**
 from the obstacle. If they steer **into** it, the lidar frame convention is wrong — change
-`lidar.angle_offset_deg` (0.0 on this car, `-90.0` for the older 27-ray model) and/or
-`control.steer_sign` (`1.0` on this car). Re-test after every change.
+`lidar.angle_offset_deg` (`-90.0` with `angle_direction: -1.0` for the current 450-ray
+models) and/or `control.steer_sign` (`1.0` on this car). Re-test after every change.
 
 **7. Calibrate `src/f1tenth_stack/config/vesc.yaml`** for your motor and servo:
 
@@ -279,11 +279,11 @@ the parts that can be checked offline (`python3 test/test_sim_parity.py` inside 
 | Lidar | 450 rays, variable resolution (0.5° front, 2.0° rear) |
 | Framework | PyTorch 1.13.1, CPU inference, ~5-6 ms/step |
 | Control rate | 60 Hz tick, policy every 8th tick (7.5 Hz, like the simulator) |
-| Active weights | `src/sac_driver/weights/session_car_1_2_policy.pth` (R_01 map, final checkpoint, policy only) |
-| Alternative weights | `src/sac_driver/weights/session_car_1_3_final_policy.pth` (R_01 + opponent bot, final) |
+| Active weights | `src/sac_driver/weights/session_Sesja_mpo2_2_policy.pth` (mpo2, peak mean_100 195 m, policy only) |
+| Alternative weights | `src/sac_driver/weights/session_car_1_2_policy.pth` (R_01, peak mean_100 220 m) |
 
 Checkpoints are tracked in git and installed into the package share directory by `setup.py`,
-so `model.path` in `driver_params.yaml` is **relative** (`weights/session_car_1_2_policy.pth`)
+so `model.path` in `driver_params.yaml` is **relative** (`weights/session_Sesja_mpo2_2_policy.pth`)
 and resolves against `<install>/share/sac_driver/`. Absolute paths, `~/...` and
 `package://sac_driver/weights/...` also work.
 
@@ -383,7 +383,7 @@ first time).
 ### `src/sac_driver/config/driver_params.yaml`
 
 ```yaml
-model.path: "weights/session_car_1_2_policy.pth"  # relative to the package share dir
+model.path: "weights/session_Sesja_mpo2_2_policy.pth"  # relative to the package share dir
 model.device: "cpu"
 model.weights_only: false
 lidar.front_step_deg: 0.5        # variable-resolution lidar (450 rays)
@@ -425,7 +425,8 @@ Occupancy grids live in `maps/` as `.pgm` + `.yaml` pairs:
 
 | Map | Note |
 |-----|------|
-| `Rybnik_01`, `Rybnik_02` | Rybnik track; `Rybnik_02` is the map the active policy was trained on |
+| `mpo2` | Current default policy training map (`Sesja_mpo2_2`) |
+| `Rybnik_01`, `Rybnik_02` | Rybnik tracks; historical checkpoints only |
 | `Rybnk_04`, `Rybnk_05` | newer Rybnik recordings |
 | `HW_01`–`HW_03`, `K_01`, `K_02`, `P_01`, `Dom_01`, `mpo`, `mpo2` | older venues |
 
@@ -451,7 +452,7 @@ ros2_ws/
 ├── src/                         # ROS2 packages
 │   ├── sac_driver/              #   AI inference node (main project)
 │   │   ├── sac_driver/
-│   │   │   ├── sac_driver_node.py    # ROS2 node: subscribers, 30Hz timer, pipeline
+│   │   │   ├── sac_driver_node.py    # ROS2 node: subscribers, 60Hz tick, pipeline
 │   │   │   ├── state_builder.py      # 455-elem frame builder + 4-frame stacking
 │   │   │   ├── lidar_converter.py    # 450-angle variable-resolution lidar extraction
 │   │   │   ├── inference_engine.py   # GaussianPolicy wrapper

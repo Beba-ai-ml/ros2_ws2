@@ -7,8 +7,9 @@ working inside this repository.
 
 1. A ROS2 Foxy workspace for a **physical** 1/10 scale F1TENTH racing car.
 2. The car is an NVIDIA Jetson Orin Nano (JetPack 5.1.5, Ubuntu 20.04, Python 3.8).
-3. The headline package is `src/sac_driver/` — a Soft Actor-Critic policy running at 30 Hz on
-   the CPU, turning lidar + odometry into Ackermann drive commands.
+3. The headline package is `src/sac_driver/` — a Soft Actor-Critic policy running on a 60 Hz
+   control tick (policy decision every 8th tick) on the CPU, turning lidar + odometry into
+   Ackermann drive commands.
 4. `src/f1tenth_stack/` brings up the hardware: lidar, VESC, joystick, command multiplexer.
 5. `src/ackermann_mux/` arbitrates between manual teleop (priority 100) and AI (priority 10).
 6. `ros2_panel/` is a GTK3 panel that starts/stops those launches.
@@ -16,6 +17,18 @@ working inside this repository.
 8. `install.sh` sets a fresh Jetson up end to end; `system/` holds the udev/systemd templates.
 9. The policy is trained elsewhere (occupancy-racer-sac2); only checkpoints arrive here.
 10. **Code in this repo moves a real vehicle.** Mistakes break hardware and hurt people.
+
+11. **Current canonical default policy:** `src/sac_driver/weights/session_Sesja_mpo2_2_policy.pth`.
+    It is a policy-only export of `occupancy_racer/Soft_Actor_Critic_2/runs/session_Sesja_mpo2_2/`,
+    trained on `mpo2` for 7,131 episodes (peak mean_100 195 m), with 450 rays, 1820 state
+    values, stack 4 and action repeat 8. Do not restore `session_Rybnik_02_1.pth` or make
+    `session_car_1_2_policy.pth` the default without an explicit decision.
+12. **Current lidar parity is authoritative:**
+    `lidar.angle_offset_deg: -90.0`, `lidar.angle_direction: -1.0`,
+    `control.steer_sign: 1.0`. The simulator has 90 degrees at the front; ROS has 0 degrees
+    at the front, so the mapping is `ROS = 90 - sim`. The offline guard is
+    `src/sac_driver/test/test_sim_parity.py`; a physical left/right cardboard test is still
+    required before driving.
 
 ## Repo map — edit here / do not edit
 
@@ -93,8 +106,10 @@ ros2 topic echo /sensors/core --field state.speed        # motor ERPM
 ros2 topic echo /commands/servo/position                 # servo command
 ```
 
-There is no automated test suite. "Verified" means: it builds, `py_compile` passes, and the
-behaviour was checked on the car (or the user confirmed it was).
+There is no full hardware test suite. The offline simulator-parity guard is
+`src/sac_driver/test/test_sim_parity.py` (run it with `python3 -m unittest
+src/sac_driver/test/test_sim_parity.py`); physical behavior still requires the user's cardboard
+and wheels-off-ground test.
 
 ## Hardware safety rules
 

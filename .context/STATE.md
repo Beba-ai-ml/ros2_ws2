@@ -1,5 +1,14 @@
 # SAC Driver - Current State
 
+## ✅ 2026-09-22 - default policy switched to the validated mpo2 training run
+The current default is `weights/session_Sesja_mpo2_2_policy.pth`, a policy-only export of
+`/home/beba/occupancy_racer/Soft_Actor_Critic_2/runs/session_Sesja_mpo2_2/session_Sesja_mpo2_2.pth`.
+The source run used `mpo2`, 450-ray lidar, state 1820, stack 4 and action repeat 8; it logged
+7,131 episodes, peak mean_100 195 m and max single episode 256.6 m. The full training checkpoint
+stays on the PC; the repo contains the ~5 MB export that `policy_loader.py` can load on Jetson.
+The current lidar parity is unchanged and authoritative: `offset=-90`, `direction=-1`,
+`steer_sign=+1`; offline tests pass, but the physical left/right cardboard test is still pending.
+
 ## 🔴 2026-09-13 — sim↔car parity fix, NOT YET DRIVEN ON THE CAR
 Branch `fix/sim-parity-20260913`. Review with evidence: `.context/review-jazda-ai-20260913.md`.
 Fixed four hard mismatches between the node and the training simulator (all four were enough on
@@ -19,9 +28,9 @@ old March cardboard verdict is not trustworthy (front-only test, garbled state c
 ## What Works
 - Full inference pipeline: lidar → state → NN → VESC commands (drove on the real car before the
   2026-09-13 parity fix; the fixed pipeline still needs its first run)
-- **Active model `weights/session_car_1_2_policy.pth`** (R_01 map, final checkpoint) — 450-ray
-  variable-resolution lidar, 1820-dim state, hidden [512,512,256]; alternative
-  `session_car_1_3_final_policy.pth`
+- **Active model `weights/session_Sesja_mpo2_2_policy.pth`** (mpo2, peak mean_100 195 m) —
+  450-ray variable-resolution lidar, 1820-dim state, hidden [512,512,256]; alternatives
+  `session_car_1_2_policy.pth` (R_01, 220 m) and `session_car_1_3_final_policy.pth`.
 - 450-angle lidar extraction with variable step (0.5° front, 2.0° rear), sim frame mapping
   `ROS = 90° - sim` (`offset -90`, `direction -1`)
 - 4-frame stacking (1820-float state vector: 455 x 4 ticks at 60 Hz)
@@ -41,7 +50,8 @@ old March cardboard verdict is not trustworthy (front-only test, garbled state c
 ## Work in Progress
 - `install.sh` — one-shot installer for a fresh Jetson; written, **not yet validated on a clean machine**
 - Stability of the bringup/restart cycle — the lidar sometimes fails to reconnect after a restart
-- First run of the parity-fixed node (cardboard left/right test, then ground run at 2 m/s)
+- First physical run of the parity-fixed node with the mpo2 policy (cardboard left/right test,
+  then ground run at 2 m/s)
 
 ## Recent Changes (2026-09-08) — repository portability push
 
@@ -66,7 +76,8 @@ everything works.
   Flags: `--check`, `--with-ros`, `--full`, `--no-build`, `--gpio-shutdown`,
   `--key-drive-service`, `--desktop`, `--yes`. Reboot afterwards; enable SPI via jetson-io if
   using the LEDs.
-- **Model `session_Rybnik_02_1.pth`** is now the active policy (trained on the Rybnik_02 map).
+- **Historical 2026-09-08 note:** model `session_Rybnik_02_1.pth` was then the active policy
+  (trained on the Rybnik_02 map).
   Weights are tracked in git (`.gitignore`: `!src/sac_driver/weights/*.pth`) and installed into
   `share/sac_driver/weights/` by `setup.py`; `model.path` became relative
   (`weights/session_Rybnik_02_1.pth`) and is resolved against the share dir, with support for
@@ -110,8 +121,9 @@ everything works.
   car — autostarting a driving car is not a safe default.
 - **Acceleration from odom speed delta** (not IMU) — computed in `_on_odom()` as
   `(current_speed - prev_speed) / dt`. **Yaw rate from odom twist.**
-- **30 Hz control rate despite 8 Hz lidar** — odom updates at ~50 Hz, so speed/accel/yaw change
-  between lidar frames; smoother output and better rate-limiter behaviour.
+- **60 Hz control tick despite 8 Hz lidar** — odom updates at ~50 Hz, so speed/accel/yaw change
+  between lidar frames; the policy is queried every 8th tick and the held action is published
+  between decisions.
 - **All RELIABLE QoS** — BEST_EFFORT causes silent message drops on this Jetson/DDS setup.
 - **SIGINT before SIGKILL** for process termination — ROS2 nodes handle SIGINT gracefully.
 - **`src/slam_toolbox` is not built** — the apt package is used; only its config file matters.
@@ -144,7 +156,7 @@ everything works.
 
 ## Config Summary (driver_params.yaml)
 ```yaml
-model.path: "weights/session_car_1_2_policy.pth"  # relative to the package share dir
+model.path: "weights/session_Sesja_mpo2_2_policy.pth"  # relative to the package share dir
 model.device: "cpu"
 model.weights_only: false
 lidar.front_step_deg: 0.5   # 450-ray variable resolution
@@ -173,8 +185,8 @@ safety.watchdog_timeout_sec: 0.5
 
 ## Next Steps
 1. **Wheels up: LEFT/RIGHT cardboard test** (docs/TROUBLESHOOTING.md) with the parity-fixed
-   node, then first ground run at `speed_limit_mps 2.0` with `session_car_1_2_policy.pth`;
-   compare with `session_car_1_3_final_policy.pth`
+   node, then first ground run at `speed_limit_mps 2.0` with `session_Sesja_mpo2_2_policy.pth`;
+   compare with `session_car_1_2_policy.pth` only as the R_01 alternative.
 2. Finish and validate `install.sh` on a clean Jetson
 3. Fix the lidar reconnect-after-restart issue
 4. Point the bringup lidar `serial_port` at `/dev/rplidar` instead of `/dev/ttyUSB0`
@@ -186,6 +198,12 @@ safety.watchdog_timeout_sec: 0.5
 ---
 
 ## History
+
+### 2026-09-22
+- Default policy changed from `session_car_1_2_policy.pth` to the policy-only
+  `session_Sesja_mpo2_2_policy.pth`, exported from the final `Sesja_mpo2_2` checkpoint.
+- `install.sh`, launch defaults, lidar diagnostic and current AI instructions now point to the
+  mpo2 policy. Lidar parity remains `offset=-90`, `direction=-1`, `steer_sign=+1`.
 
 ### 2026-09-13
 - **Sim↔car parity fix** (see the red block at the top): lidar frame `offset -90 / direction -1`,

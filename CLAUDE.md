@@ -4,8 +4,16 @@
 checklist. This file is the short version.
 
 This is a ROS2 Foxy workspace for a physical F1TENTH racing car (Jetson Orin Nano, JetPack
-5.1.5, Python 3.8, torch 1.13.1 CPU). `src/sac_driver/` runs a Soft Actor-Critic policy at
-30 Hz; `src/f1tenth_stack/` brings up the lidar, VESC, joystick and command mux.
+5.1.5, Python 3.8, torch 1.13.1 CPU). `src/sac_driver/` runs the default
+`session_Sesja_mpo2_2_policy.pth` policy on a 60 Hz tick with a decision every 8 ticks;
+`src/f1tenth_stack/` brings up the lidar, VESC, joystick and command mux.
+
+The default policy is the policy-only export from
+`occupancy_racer/Soft_Actor_Critic_2/runs/session_Sesja_mpo2_2/`, trained on `mpo2`
+(7,131 episodes, peak mean_100 195 m). Current lidar parity is
+`angle_offset_deg=-90`, `angle_direction=-1`, `steer_sign=+1`; do not replace this with
+the old `offset=0` convention. Verify with `src/sac_driver/test/test_sim_parity.py` and
+the left/right cardboard test before any physical drive.
 
 ## Key commands
 
