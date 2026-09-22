@@ -232,10 +232,11 @@ ros2 service call /sac_driver/enable std_srvs/srv/SetBool "{data: true}"
 ```
 
 The wheels must steer **away** from the cardboard. If they steer into it, the lidar frame
-convention is wrong. `lidar.angle_offset_deg` is `0.0` for the current models (0° = forward);
-the older 27-ray model used `-90.0` (90° = forward). Changing the offset by 90° also flips the
-effective steering direction, so `control.steer_sign` usually has to change with it — on this
-car offset `0.0` pairs with `steer_sign: 1.0`.
+convention is wrong. The current 450-ray models use `lidar.angle_offset_deg: -90.0`,
+`lidar.angle_direction: -1.0` and `control.steer_sign: 1.0`: the simulator's 90° front ray
+maps to ROS 0° forward, and simulator angle increases in the opposite direction to ROS.
+The older 27-ray profile has its own explicit legacy values. Do not change the current values
+based on a front-only test; validate left and right cardboard positions as described below.
 
 Check what the lidar actually sees with:
 

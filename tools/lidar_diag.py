@@ -71,7 +71,7 @@ class Diag(Node):
             lidar = converter.convert(self.scan)
 
             # Find which observation index has the obstacle (lowest value)
-            front_idx = len(angles_450) // 4  # ~index at 90deg training angle
+            front_idx = min(range(len(angles_450)), key=lambda i: abs(angles_450[i] - 90.0))
             front_val = float(lidar[front_idx])
 
             # Current layout: [lidar, collision=0, speed/2.5, servo_norm,

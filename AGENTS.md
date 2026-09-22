@@ -21,7 +21,8 @@ working inside this repository.
 11. **Current canonical default policy:** `src/sac_driver/weights/session_Sesja_mpo2_2_policy.pth`.
     It is a policy-only export of `occupancy_racer/Soft_Actor_Critic_2/runs/session_Sesja_mpo2_2/`,
     trained on `mpo2` for 7,131 episodes (peak mean_100 195 m), with 450 rays, 1820 state
-    values, stack 4 and action repeat 8. Do not restore `session_Rybnik_02_1.pth` or make
+    values, stack 4 and action repeat 8. The file uses legacy torch serialization for torch
+    1.13 on Jetson. Do not restore `session_Rybnik_02_1.pth` or make
     `session_car_1_2_policy.pth` the default without an explicit decision.
 12. **Current lidar parity is authoritative:**
     `lidar.angle_offset_deg: -90.0`, `lidar.angle_direction: -1.0`,
