@@ -13,9 +13,10 @@ The current lidar parity is unchanged and authoritative: `offset=-90`, `directio
 Added `tools/ros2_input_diagnostic.py`. It subscribes to `/scan`, `/odom`, `/drive`, and
 `/commands/servo/position`; reports raw nearest scan angle, the nearest ray after the AI converter,
 message ages/rate, odometry signs, drive command, and servo value. It only reads topics and uses
-the checked-in `driver_params.yaml` for the AI-ray estimate. Side labels assume `laser` yaw is 0
-relative to `base_link`; the physical scan orientation and active runtime parameter overrides still
-need to be checked on the car.
+the checked-in `driver_params.yaml` for the AI-ray estimate by default; `--angle-offset` and
+`--angle-direction` can override it with live values from `ros2 param get`. Side labels assume
+`laser` yaw is 0 relative to `base_link`; the physical scan orientation still needs to be checked
+on the car.
 
 ## 🔴 2026-09-13 — sim↔car parity fix, NOT YET DRIVEN ON THE CAR
 Branch `fix/sim-parity-20260913`. Review with evidence: `.context/review-jazda-ai-20260913.md`.

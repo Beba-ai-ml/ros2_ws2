@@ -3,12 +3,16 @@
 
 Run from the workspace root after sourcing ROS 2 and the workspace setup:
     python3 tools/ros2_input_diagnostic.py
+    python3 tools/ros2_input_diagnostic.py --angle-offset 90 --angle-direction -1
 
 This node only subscribes. It does not publish commands or start other nodes.
+Pass the active lidar parameters from `ros2 param get /sac_driver ...` to match the
+running AI node. Without overrides, the checked-in driver_params.yaml is used.
 """
 
 from __future__ import annotations
 
+import argparse
 import math
 import sys
 import time
@@ -76,7 +80,12 @@ def _range_summary(scan: LaserScan) -> Tuple[Optional[int], Optional[float], Opt
 
 
 class InputDiagnostic(Node):
-    def __init__(self, report_interval_sec: float = 1.0) -> None:
+    def __init__(
+        self,
+        report_interval_sec: float = 1.0,
+        angle_offset_override: Optional[float] = None,
+        angle_direction_override: Optional[float] = None,
+    ) -> None:
         super().__init__("ros2_input_diagnostic")
         params = _load_lidar_config()
 
@@ -88,8 +97,18 @@ class InputDiagnostic(Node):
         front_step = float(params.get("lidar.front_step_deg", 0.5))
         rear_step = float(params.get("lidar.rear_step_deg", 2.0))
         self.max_range_m = float(params.get("lidar.max_range_m", 20.0))
-        self.angle_offset_deg = float(params.get("lidar.angle_offset_deg", -90.0))
-        self.angle_direction = float(params.get("lidar.angle_direction", -1.0))
+        source_offset = float(params.get("lidar.angle_offset_deg", -90.0))
+        source_direction = float(params.get("lidar.angle_direction", -1.0))
+        self.angle_offset_deg = (
+            source_offset if angle_offset_override is None else float(angle_offset_override)
+        )
+        self.angle_direction = (
+            source_direction if angle_direction_override is None else float(angle_direction_override)
+        )
+        if angle_offset_override is None and angle_direction_override is None:
+            self.converter_config_source = "checked-in driver_params.yaml"
+        else:
+            self.converter_config_source = "CLI override(s) over driver_params.yaml"
         self.converter = LidarConverter(
             target_angles_deg=build_lidar_angles(front_step, rear_step),
             max_range_m=self.max_range_m,
@@ -120,20 +139,15 @@ class InputDiagnostic(Node):
             % (self.scan_topic, self.odom_topic, self.drive_topic, self.servo_topic)
         )
         self.get_logger().info(
-            "Converter config from %s: rays=%d offset=%+.1f direction=%+.1f max_range=%.1fm"
+            "Converter config (%s): rays=%d offset=%+.1f direction=%+.1f max_range=%.1fm"
             % (
-                PARAMS_PATH,
+                self.converter_config_source,
                 len(self.converter.target_angles_deg),
                 self.angle_offset_deg,
                 self.angle_direction,
                 self.max_range_m,
             )
         )
-        self.get_logger().info(
-            "AI ray estimate uses this source config; compare with `ros2 param dump /sac_driver` "
-            "before treating it as the active node configuration."
-        )
-
     def _on_scan(self, msg: LaserScan) -> None:
         now = time.monotonic()
         if self._last_scan_received_monotonic is not None:
@@ -273,8 +287,28 @@ class InputDiagnostic(Node):
 
 
 def main() -> None:
-    rclpy.init()
-    node = InputDiagnostic()
+    parser = argparse.ArgumentParser(description="Read-only ROS2 motion input diagnostic")
+    parser.add_argument(
+        "--angle-offset",
+        type=float,
+        default=None,
+        help="active lidar.angle_offset_deg from /sac_driver (default: source YAML)",
+    )
+    parser.add_argument(
+        "--angle-direction",
+        type=float,
+        default=None,
+        help="active lidar.angle_direction from /sac_driver (default: source YAML)",
+    )
+    parser.add_argument("--report-interval-sec", type=float, default=1.0)
+    args, ros_args = parser.parse_known_args()
+
+    rclpy.init(args=ros_args)
+    node = InputDiagnostic(
+        report_interval_sec=args.report_interval_sec,
+        angle_offset_override=args.angle_offset,
+        angle_direction_override=args.angle_direction,
+    )
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
