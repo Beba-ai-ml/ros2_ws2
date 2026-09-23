@@ -24,15 +24,15 @@ working inside this repository.
     values, stack 4 and action repeat 8. The file uses legacy torch serialization for torch
     1.13 on Jetson. Do not restore `session_Rybnik_02_1.pth` or make
     `session_car_1_2_policy.pth` the default without an explicit decision.
-12. **Read `.context/RESEARCH-jetson-20260923.md` before lidar work.** Live parameters and
-    source YAML are `lidar.angle_offset_deg: -90.0`, `lidar.angle_direction: -1.0`, with
-    `control.steer_sign: 1.0` in YAML. Cardboard captures support raw front near 0 degrees and
-    left near +90 degrees. However, live static TF yaw is pi, Python offset fallbacks are
-    +90, and four offline lidar tests assume a backwards raw frame and fail. These are
-    unresolved inconsistencies, not proof of a physical 180-degree raw frame. Preserve
-    calibration until the measured frame and TF have been reconciled; do not restore +90
-    based on older documentation. The user explicitly prohibited enabling autonomy in
-    the 2026-09-23 research session. Continue with subscriptions and parameter reads only.
+12. **Current measured lidar frame:** `lidar.angle_offset_deg: -90.0`,
+    `lidar.angle_direction: -1.0`, `control.steer_sign: 1.0`, static TF yaw **0**.
+    User-confirmed front/left/right cardboard captures on 2026-09-23 established raw front
+    near 0 degrees, left positive, right negative. Python fallbacks now match YAML and all
+    16 offline parity tests pass. Read `.context/RESEARCH-jetson-20260923.md` for evidence;
+    do not restore the old +90 offset or TF yaw pi from a remembered housing orientation.
+    Physical steering response and driving remain untested. The user prohibited enabling
+    autonomy in this session, but confirmed wheels off the ground and authorized Bringup.
+    Leave AI off; use subscriptions and parameter reads for further diagnostics.
 
 ## Repo map — edit here / do not edit
 

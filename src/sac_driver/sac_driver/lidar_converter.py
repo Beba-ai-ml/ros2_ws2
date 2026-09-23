@@ -24,10 +24,10 @@ def _get_attr(obj: object, name: str):
 class LidarConverter:
     target_angles_deg: Sequence[float]
     max_range_m: float
-    # Preserved fallback for a backwards raw frame. The active YAML uses -90
-    # instead; see .context/RESEARCH-jetson-20260923.md. Callers should pass
-    # the measured mapping explicitly, including legacy 27-ray callers.
-    angle_offset_deg: float = 90.0
+    # Cardboard measurements confirm raw front=0, left=+90, right=-90.
+    # Match the active YAML: sim angle a maps to raw 90-a. Legacy 27-ray
+    # callers must pass their different historical mapping explicitly.
+    angle_offset_deg: float = -90.0
     angle_direction: float = -1.0
     use_interpolation: bool = True
 

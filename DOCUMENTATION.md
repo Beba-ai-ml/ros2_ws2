@@ -65,7 +65,7 @@ Extracts target angles from the full lidar scan with angle wrapping to [-pi, pi)
 | Element | Description |
 |---------|-------------|
 | `class LidarConverter` | Stateless converter, initialized with angle list and offset |
-| `__init__(angles_deg, offset_deg, max_range)` | Sets up target angles and max range (20m). Active YAML offset is -90deg; Python fallback +90deg remains under review. |
+| `__init__(angles_deg, offset_deg, max_range)` | Sets up target angles and max range (20m). YAML and Python fallback both use offset -90deg, matching the measured raw frame. |
 | `convert(scan_msg)` | Returns array of normalized distances [0,1]. Uses interpolation between adjacent scan indices. |
 | `build_lidar_angles(front_step, rear_step)` | Generates variable-resolution angles: front hemisphere (0-180°) at front_step, rear (180-360°) at rear_step |
 
@@ -152,7 +152,7 @@ Builds the 1820-float state vector from sensor data.
 | `lidar.front_step_deg` | float | `0.5` | Front hemisphere angular step (0 = use angles_deg list) |
 | `lidar.rear_step_deg` | float | `2.0` | Rear hemisphere angular step (0 = use angles_deg list) |
 | `lidar.angles_deg` | float[] | 27 angles | Explicit target angles (overridden when front/rear step > 0) |
-| `lidar.angle_offset_deg` | float | `-90.0` (YAML/live) | Raw angle = `direction * (a + offset)`: sim front 90° maps to raw 0°. Python fallback remains +90; see `.context/RESEARCH-jetson-20260923.md`. |
+| `lidar.angle_offset_deg` | float | `-90.0` | Raw angle = `direction * (a + offset)`: sim front 90° maps to raw 0°. YAML and Python fallback agree; see `.context/RESEARCH-jetson-20260923.md`. |
 | `lidar.angle_direction` | float | `-1.0` | With active offset -90, sim 0° maps to raw +90° (left in the cardboard captures). |
 | `lidar.max_range_m` | float | `20.0` | Max lidar range for normalization |
 | `lidar.use_interpolation` | bool | `true` | Interpolate between scan indices |
@@ -200,7 +200,7 @@ Launches the full hardware stack:
 - VESC motor controller driver + odom conversion
 - Joystick driver + joy_mode_manager
 - Ackermann mux
-- Static transform publishers (base_link → laser, retained yaw π; inconsistent with the 2026-09-23 cardboard captures)
+- Static transform publishers (base_link → laser, yaw 0; matches the 2026-09-23 front/left/right cardboard captures)
 
 ---
 

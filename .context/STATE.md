@@ -1,6 +1,49 @@
 # SAC Driver - Current State
 
-## 2026-09-23 - direct Jetson audit and GitHub synchronization
+## 2026-09-23 15:13 - measured lidar frame corrected and verified live
+
+Fresh, user-confirmed captures with AI off: front raw **+4.26° / 0.316 m**, left raw
+**+122.92° / 0.281 m**, right raw **-66.84° / 0.318 m**. Side boxes were not exactly on
+the lateral sensor axes; their signs and transformed positions consistently identify the
+published raw frame. The previous TF yaw π put front behind the base and swapped left/right.
+
+- Corrected `base_link -> laser` yaw to **0**, preserving translation `(0.27, 0, 0.11)`.
+- Python converter/node fallbacks now use **-90**, matching the unchanged YAML -90/-1.
+- Corrected four tests that assumed the opposite raw frame and added a regression for
+  callers omitting YAML. **16/16 offline tests pass.**
+- Stopped the owned bringup cleanly, built `sac_driver` and `f1tenth_stack`, and restarted
+  **Bringup only** on the user's wheels-off-ground authorization. AI remains off.
+- Live audit after restart confirmed quaternion **(0, 0, 0, 1)**, telemetry **50.02 Hz**,
+  odometry **50.29 Hz**, scan **10.05 Hz**, **11.4 V**, fault **0**, speed **0**, lock **true**.
+  No SAC node and no `/drive` messages. Source and installed corrected packages agree.
+- Current bringup PID 67623, VESC driver PID 67703, started outside the panel at 15:13:10.
+  Do not start another bringup from the panel. Passive USB and ROS health monitors remain
+  active; they do not open the serial port or publish control commands.
+
+The raw-frame/TF/fallback inconsistency is resolved. Physical steering response, ground
+driving, full latency and SLAM map quality remain untested. The no-autonomy instruction
+remains active. Detailed evidence and earlier snapshots are in the research report below.
+
+## 2026-09-23 15:01 - VESC USB recovered; bringup restored, AI off
+
+After repeated USB disconnects, VESC reappeared as `/dev/ttyACM0` with `/dev/vesc` symlink.
+Direct firmware queries answered **6.02, HW 60** repeatedly from 14:56 onward. Three
+read-only telemetry samples reported **11.5 V, 0 ERPM, fault 0**, FET temperature about 29°C.
+Motor and app configuration signatures match the bundled 6.02 definitions; nothing was
+uploaded. The cause of the earlier USB disconnects has not been established.
+
+The user explicitly confirmed **wheels off the ground** and authorized **Bringup only**.
+After closing the direct serial monitor and checking the port was free, started the existing
+installed `bringup_launch3.py` at 15:00:52 without rebuilding. The 18-second read-only audit
+confirmed `/sensors/core` and `/odom` at about **50 Hz**, `/scan` at about **10 Hz**,
+`/autonomy_lock=true`, and zero odometry velocity. No SAC process or `/drive` messages.
+The old missing-VESC finding below is a snapshot of the earlier audit, not the present state.
+
+Bringup is owned by this diagnostic terminal, not the panel: do not start a second bringup
+from the panel. USB monitoring is now passive and does not open the VESC serial port.
+Autonomy remains prohibited; fresh cardboard measurements are being collected with AI off.
+
+## 2026-09-23 14:44 - earlier direct Jetson audit and GitHub synchronization
 
 Read [RESEARCH-jetson-20260923.md](RESEARCH-jetson-20260923.md) first. The local changes were
 preserved in `8ca0698` and merged with the remote handoff `2df1fc0` on
@@ -74,7 +117,7 @@ old March cardboard verdict is not trustworthy (front-only test, garbled state c
   450-ray variable-resolution lidar, 1820-dim state, hidden [512,512,256]; alternatives
   `session_car_1_2_policy.pth` (R_01, 220 m) and `session_car_1_3_final_policy.pth`.
 - 450-angle lidar extraction with variable step (0.5° front, 2.0° rear); active YAML/live
-  mapping is `raw = 90° - sim` (`offset -90`, `direction -1`), with TF still under review
+  mapping is `raw = 90° - sim` (`offset -90`, `direction -1`), with corrected TF yaw 0
 - 4-frame stacking (1820-float state vector: 455 x 4 ticks at 60 Hz)
 - Observation per frame: [450 lidar, collision=0, speed_norm(/2.5), servo_norm(0..1), linear_accel, angular_vel]
 - Deadman switch via `/autonomy_lock` (hold RB to drive, release to stop); LB overrides
@@ -226,9 +269,9 @@ safety.watchdog_timeout_sec: 0.5
 ```
 
 ## Next Steps
-0. Resolve missing VESC USB/power first, then reconcile the measured raw frame, retained TF
-   yaw π, Python fallbacks and offline test assumptions using the research report. Any
-   necessary restart must be coordinated with the user; autonomy remains prohibited here.
+0. Monitor the restored VESC USB connection. Raw scan directions, TF and Python fallbacks
+   are now reconciled; physical steering response still needs a separate authorized test.
+   Autonomy remains prohibited in this session.
 1. **Wheels up: LEFT/RIGHT cardboard test** (docs/TROUBLESHOOTING.md) with the parity-fixed
    node, then first ground run at `speed_limit_mps 2.0` with `session_Sesja_mpo2_2_policy.pth`;
    compare with `session_car_1_2_policy.pth` only as the R_01 alternative.

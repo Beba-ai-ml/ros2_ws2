@@ -3,8 +3,8 @@
 Autonomous racing vehicle inference node — runs a trained SAC (Soft Actor-Critic) neural network policy on an NVIDIA Jetson Orin Nano, reading lidar + odom and outputting Ackermann drive commands to a VESC motor controller. Part of an F1TENTH-style racing platform. The repository is self-contained and portable: clone it on any Jetson with JetPack 5.x, run `./install.sh`, and the car drives.
 
 ## Context Files
-- `RESEARCH-jetson-20260923.md` — **read first**: direct live audit, cardboard replay,
-  confirmed -90/-1 runtime, missing VESC, TF conflict, DDS diagnostic workaround
+- `RESEARCH-jetson-20260923.md` — **read first**: direct live audit, VESC recovery,
+  fresh cardboard captures, corrected TF yaw 0 and -90/-1 fallbacks, DDS diagnostic workaround
 - `KNOWLEDGE.md` — Architecture, key files, stack, conventions, how to run, debugging lessons
 - `STATE.md` — Current state, recent changes, decisions, known issues, gotchas
 - `HANDOFF-20260913-sim-parity.md` — historical context: what the 2026-09-13 sim↔car parity fix changed, the

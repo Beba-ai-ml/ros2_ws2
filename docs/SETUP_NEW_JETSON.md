@@ -235,7 +235,7 @@ The wheels must steer **away** from the cardboard. If they steer into it, invest
 scan frame and steering calibration. On 2026-09-23 the live 450-ray configuration is
 `lidar.angle_offset_deg: -90.0`, `lidar.angle_direction: -1.0`, with `control.steer_sign: 1.0`
 in YAML. Recorded cardboard positions support raw front 0°, left +90°, right -90°.
-The retained static TF yaw π and Python +90 fallbacks conflict with those measurements.
+Static TF yaw 0 and Python -90 fallbacks now match those measurements.
 Read [the research report](../.context/RESEARCH-jetson-20260923.md) before copying this
 calibration to another car. The 27-ray profile is legacy and incompatible with the current node.
 
@@ -247,8 +247,8 @@ python3 ros2_panel/scan_test.py     # prints the 20 closest points of one /scan 
 
 ## 10. Lidar mounting
 
-The bringup publishes `base_link` → `laser` at `0.27 0.0 0.11` (x y z) with yaw π in
-`src/f1tenth_stack/launch/bringup_launch3.py`. That yaw is under investigation on this car.
+The bringup publishes `base_link` → `laser` at `0.27 0.0 0.11` (x y z) with yaw 0 in
+`src/f1tenth_stack/launch/bringup_launch3.py`, following measured scan directions on this car.
 Measure the published scan frame against the vehicle before setting TF on a new car;
 SLAM and localization depend on it.
 

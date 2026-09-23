@@ -4,6 +4,12 @@ Kontynuacja [HANDOFF-jetson_migracja_1.md](HANDOFF-jetson_migracja_1.md), wykona
 na Jetsonie. Odczyt runtime zakończony około 14:44 czasu Europe/Warsaw. To raport z
 działających procesów, kodu i istniejących pomiarów; próby jazdy nie wykonano.
 
+**Stan końcowy po 15:13:** VESC i odometria działają, a nowe pomiary przód/lewo/prawo
+potwierdziły korektę TF do yaw 0 i fallbacków Python do -90, zgodnie z YAML. Testy 16/16,
+build obu pakietów poprawny; nowy TF zweryfikowano live. Działa sam Bringup na zgodę
+Wojtka z kołami w powietrzu. AI i autonomia pozostają wyłączone. Szczegóły są w sekcjach
+aktualizacji na końcu. Pierwotny audyt poniżej opisuje stan około 14:44 i wcześniejsze usterki.
+
 ## Wynik
 
 **Aktywne AI używa `offset=-90`, `direction=-1` i modelu mpo2.** Wskazania kartonów są
@@ -200,3 +206,120 @@ Składnia zmienionych plików Python, nowego czytnika parametrów i profilu XML 
 5. Test skrętu/napędu pozostaje osobnym krokiem po zgodzie Wojtka i potwierdzeniu warunków
    wymaganych w `AGENTS.md`. Obecny zakaz autonomii obowiązuje. Nie oznaczać migracji ani
    naprawy zachowania auta jako zakończonej na podstawie samych odczytów.
+
+## Aktualizacja 14:56–15:01: VESC i odometria przywrócone
+
+Log jądra wykazał błąd USB `-71` oraz wielokrotne pojawianie się urządzenia `0483:5740`
+i rozłączenia. Ostatnie wykrycie przed stabilnym monitoringiem nastąpiło o 14:55:43.
+Nie ustalono, czy przyczyną był kabel, styk, zasilanie czy inny element połączenia.
+
+Od 14:56:07 bezpośredni odczyt `COMM_FW_VERSION` odpowiadał wielokrotnie:
+**firmware 6.02, HW 60**. Port `/dev/vesc` wskazywał `/dev/ttyACM0`. Trzy odczyty
+`COMM_GET_VALUES` wykazały 11.5 V, 0 ERPM, zerowy prąd silnika/wejścia i fault code 0.
+Temperatura FET wynosiła 28.7–28.8°C. Pole temperatury silnika miało około -75°C;
+nie traktować tego jako rzeczywistej temperatury silnika — stan czujnika nie jest zweryfikowany.
+
+`python3 tools/vesc/vesc_config_upload.py --check-sig` odczytało zgodne sygnatury:
+motor `0x2E43A161`, app `0x1D003A2C`. To zgodność formatu definicji konfiguracji z firmware,
+nie porównanie wszystkich wartości nastaw. Nie wgrywano konfiguracji ani firmware.
+
+Wojtek potwierdził „Koła w powietrzu — uruchom sam Bringup”. Zakończono własny monitor,
+który otwierał port szeregowy; sprawdzono brak innych driverów i nieaktywny `key_drive.service`.
+Uruchomiono istniejący zainstalowany launch:
+
+```bash
+source /opt/ros/foxy/setup.bash
+source ~/ros2_ws/install/setup.bash
+ros2 launch f1tenth_stack bringup_launch3.py
+```
+
+Launch wystartował o 15:00:52 (PID 59320), driver VESC PID 59392 zgłosił poprawne połączenie.
+AI pozostaje wyłączone. Około 18 sekund audytu dało:
+
+| Sygnał | Wynik |
+|---|---|
+| `/sensors/core` | 818 wiadomości, około 50.24 Hz, 11.5 V, speed 0, fault 0 |
+| `/odom` | 818 wiadomości, około 50.44 Hz, linear.x 0, angular.z 0 |
+| `/scan` | 182 wiadomości, około 10.05 Hz |
+| `/autonomy_lock` | około 50 Hz, `true` |
+| `/drive` / `/sac_driver` | brak wiadomości / brak działającego węzła |
+| VESC port i limity | `/dev/vesc`, ±3525 ERPM |
+| odometria | wheelbase 0.35, `use_servo_cmd_to_calc_angular_velocity=true`, TF włączony |
+
+Okno subskrypcji zaczęło się po komendach neutralnych emitowanych przez startup bringupu,
+więc brak odebranych komend serwa w tym oknie nie oznacza, że nie wysłano ich na starcie.
+Pełny wynik pozostaje lokalnie w `log/bringup_recovery_audit_20260923.json`.
+Bringup działa poza panelem; nie wolno uruchomić drugiego drivera na tym samym porcie.
+Monitor USB po starcie bringupu sprawdza wyłącznie obecność urządzenia i nie otwiera portu.
+
+## Nowy pomiar przodu z AI wyłączonym
+
+Po przywróceniu bringupu Wojtek przestawił box dokładnie przed auto i potwierdził gotowość.
+Zapisano dwa świeże skany po potwierdzeniu; ostatni trafił jako `front_confirmed` do
+`log/lidar_cardboard_recheck_20260923.jsonl`. Minimum raw: **+4.256°, 0.316 m**.
+Konwerter -90/-1 wskazał indeks **171**, kąt modelu **85.5°**, odległość **0.316 m**,
+czyli blisko osi przodu modelu 90° / indeksu 180.
+
+Ten sam punkt przy obecnej translacji lidaru x=0.27 m ma współrzędne w `base_link`:
+
+| TF | x [m] | y [m] |
+|---|---:|---:|
+| Obecny yaw π | -0.0451 | -0.0235 |
+| Kandydat yaw 0 | +0.5851 | +0.0235 |
+
+Wcześniejszy TF umieszczał potwierdzony fizyczny przód za początkiem układu `base_link`.
+Na tym etapie był to rachunek z rzeczywistego skanu, bez zmiany TF. Następnie wykonano
+osobno potwierdzone pomiary lewej i prawej strony, opisane niżej.
+
+## Pomiary boczne, korekta i weryfikacja po restarcie 15:13
+
+Wojtek osobno potwierdził przestawienie boxa na lewo i na prawo. Po każdym potwierdzeniu
+capture czekał na dwa świeże skany. W tym samym lokalnym JSONL są teraz trzy rekordy:
+
+| Pozycja potwierdzona przez Wojtka | Raw minimum | Indeks modelu przy -90/-1 | Indeks przy +90/-1 |
+|---|---|---:|---:|
+| przód | +4.256°, 0.316 m | 171 | 399 |
+| lewo | +122.921°, 0.281 m | 433 | 291 |
+| prawo | -66.843°, 0.318 m | 313 | 438 |
+
+Box po lewej stał częściowo za środkiem lidaru; prawy był nieco przed nim. Nie wymagamy,
+żeby ich minima trafiły dokładnie na indeksy 0 i 360. Pozycje w bazie liczone z yaw 0
+to odpowiednio `(0.585, +0.023)`, `(0.117, +0.236)`, `(0.395, -0.292)` metra.
+Yaw π zamieniał oba znaki boczne i umieszczał przedni punkt przy x=-0.045 m.
+Wyniki są spójne z wcześniejszymi sześcioma zapisami oraz konwencją LaserScan.
+
+Na tej podstawie zmieniono:
+
+- `bringup_launch3.py`: yaw π → **0**, bez zmiany translacji;
+- `LidarConverter` i fallback `SACDriverNode`: +90 → **-90**, zgodnie z istniejącym YAML;
+- cztery testy geometrii: fizyczny raw przód 0, lewo +90, prawo -90, tył ±180;
+- dodano regresję dla konwertera uruchomionego bez jawnego offsetu;
+- dokumentację i instrukcje agentów, żeby nie przywracały obalonego założenia o raw yaw π.
+
+YAML offset -90, direction -1, speed/steer signs i kalibracja VESC pozostały bez zmian.
+Nie zmieniano plików SLAM, limitów prędkości ani logiki deadmana. Nie uruchamiano AI.
+
+`python3 -m unittest src/sac_driver/test/test_sim_parity.py`: **16/16 OK**.
+Po zatrzymaniu własnego bringupu i sprawdzeniu, że wszystkie jego dzieci zakończyły pracę,
+`colcon build --packages-select sac_driver f1tenth_stack`: **oba pakiety zbudowane poprawnie**.
+Bringup ponownie wystartował o 15:13:10, PID 67623; VESC driver PID 67703.
+
+Odczyt po restarcie (`log/lidar_frame_corrected_audit_20260923.json`, około 18 sekund):
+
+| Sprawdzenie | Wynik |
+|---|---|
+| `/tf_static`, `base_link -> laser` | xyz `(0.27, 0, 0.11)`, quaternion **(0, 0, 0, 1)** |
+| `/sensors/core` | 901 wiadomości, **50.02 Hz**, **11.4 V**, fault **0**, ERPM **0** |
+| `/odom` | 852 wiadomości, **50.29 Hz**, prędkość zerowa |
+| `/scan` | 182 wiadomości, **10.05 Hz** |
+| `/autonomy_lock` | **true**, około 50 Hz |
+| AI | brak węzła `/sac_driver`, brak wiadomości `/drive` |
+
+USB pozostało obecne podczas planowanego restartu. Pasywny monitor ROS zgłasza przerwy
+w danych podczas zatrzymanego bringupu; nie należy ich mylić z rozłączeniem USB.
+Bringup jest uruchomiony z terminala diagnostycznego, poza panelem. Monitorowanie USB
+i tematów ROS nie otwiera portu szeregowego i nie publikuje komend sterujących.
+
+Zamknięte: zgodność zmierzonej geometrii raw skanu, TF i fallbacków z aktywnym YAML.
+Otwarte: fizyczna reakcja skrętu, jazda po ziemi, pomiar pełnego opóźnienia i jakość mapy
+SLAM. Pomiary pasywne i testy offline nie zastępują tych prób. Autonomia nadal zabroniona.

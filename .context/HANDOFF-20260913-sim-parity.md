@@ -1,8 +1,9 @@
 # HANDOFF 13.09.2026 - naprawa zgodności sim↔auto (gałąź `fix/sim-parity-20260913`)
 
 **Uwaga 2026-09-23:** opisy montażu 180°, offsetu +90 i zaliczonych testów poniżej są
-historyczne i nie opisują obecnego stanu. Live/YAML ma -90/-1, TF nadal π, a cztery testy
-lidarowe nie przechodzą. Najpierw przeczytaj [bieżący research](RESEARCH-jetson-20260923.md).
+historyczne i nie opisują obecnego stanu. Po nowych pomiarach przód/lewo/prawo YAML i
+fallbacki mają -90/-1, TF yaw 0, a 16 testów offline przechodzi. Fizycznej reakcji skrętu
+nie testowano. Najpierw przeczytaj [bieżący research](RESEARCH-jetson-20260923.md).
 
 Dla Wojtka i dla następnej sesji agenta. Ten handoff opisuje naprawę z 13.09.2026; bieżący
 domyślny model został później przełączony na `session_Sesja_mpo2_2_policy.pth` (stan bieżący

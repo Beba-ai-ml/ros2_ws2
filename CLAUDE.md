@@ -12,10 +12,11 @@ The default policy is the policy-only export from
 `occupancy_racer/Soft_Actor_Critic_2/runs/session_Sesja_mpo2_2/`, trained on `mpo2`
 (7,131 episodes, peak mean_100 195 m). Live lidar parameters and YAML on 2026-09-23 are
 `angle_offset_deg=-90`, `angle_direction=-1`; cardboard data supports front raw 0° and
-left raw +90°. Static TF still has yaw π and Python fallbacks use +90: this conflict is
-unresolved. Four of 15 offline parity tests fail because they assume the opposite raw frame.
+left raw +90°. Fresh user-confirmed front/left/right captures established the frame;
+TF yaw is now 0 and Python fallbacks match YAML -90. All 16 offline parity tests pass.
 Read `.context/RESEARCH-jetson-20260923.md`. The user prohibited enabling autonomy during
-this research session; inspect only, without publishing commands or restarting the car.
+this session, but confirmed wheels off the ground and authorized Bringup. Leave AI off.
+Physical steering response and driving remain untested.
 
 ## Key commands
 

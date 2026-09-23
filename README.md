@@ -7,8 +7,10 @@ The SAC agent was trained in simulation with [occupancy-racer-sac2](https://gith
 This repository is self-contained: clone it on a fresh Jetson, run one installer, and the car drives.
 
 **2026-09-23 status:** the live AI uses lidar `-90/-1`, matching the captured cardboard
-directions. Static TF yaw π and Python +90 fallbacks remain inconsistent with those captures;
-four offline lidar tests fail. The running bringup has no VESC connection or odometry.
+directions. Fresh front/left/right captures confirmed the frame: static TF yaw is now 0,
+Python fallbacks match YAML -90, and all 16 offline parity tests pass. VESC USB recovered;
+bringup now supplies
+telemetry and odometry at about 50 Hz, with autonomy locked and AI off.
 See [the live research report](.context/RESEARCH-jetson-20260923.md) before calibration or driving.
 
 ---
@@ -140,7 +142,8 @@ large piece of cardboard close to **one** side of the lidar. The wheels must ste
 from the obstacle. If they steer **into** it, measure the raw scan directions and compare
 the AI mapping, TF and steering calibration before changing values. Live AI currently uses
 `lidar.angle_offset_deg: -90.0`, `angle_direction: -1.0`; `control.steer_sign` is `1.0` in YAML.
-The retained TF yaw π conflicts with the recorded raw frame. See the research report above.
+Static TF yaw 0 now matches the measured raw frame. Physical steering response still needs
+validation; see the research report above.
 
 **7. Calibrate `src/f1tenth_stack/config/vesc.yaml`** for your motor and servo:
 
@@ -204,7 +207,7 @@ still at the default `2.0`.
 | `joy_teleop` | `joy_teleop` (patched copy) | `/joy` → `/teleop` |
 | `joy_mode_manager` | `f1tenth_stack` | deadman gating, `/teleop_gated`, `/autonomy_lock` |
 | `ackermann_mux` | `ackermann_mux` | priority mux → `ackermann_cmd` |
-| `static_transform_publisher` | `tf2_ros` | `base_link` → `laser` (0.27, 0, 0.11, yaw π; frame conflict under investigation) |
+| `static_transform_publisher` | `tf2_ros` | `base_link` → `laser` (0.27, 0, 0.11, yaw 0; verified raw scan directions) |
 
 Notes:
 
@@ -394,7 +397,7 @@ model.device: "cpu"
 model.weights_only: false
 lidar.front_step_deg: 0.5        # variable-resolution lidar (450 rays)
 lidar.rear_step_deg: 2.0
-lidar.angle_offset_deg: -90.0    # live/YAML: sim front 90 deg -> raw 0 deg; TF unresolved
+lidar.angle_offset_deg: -90.0    # YAML/fallback: sim front 90 deg -> raw 0 deg; TF yaw 0
 lidar.angle_direction: -1.0      # preserves simulator ray order; sim 0 = car left
 lidar.max_range_m: 20.0
 state.stack_frames: 4

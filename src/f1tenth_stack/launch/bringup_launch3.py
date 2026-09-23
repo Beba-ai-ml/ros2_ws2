@@ -214,8 +214,8 @@ def generate_launch_description():
 
     # ======================
     # 5. Statyczny TF base_link -> laser
-    #    Preserved yaw pi; conflicts with the 2026-09-23 cardboard captures.
-    #    See .context/RESEARCH-jetson-20260923.md before recalibrating this TF.
+    #    Cardboard captures on 2026-09-23 confirm the published laser frame
+    #    is aligned with the car: front near 0deg, left positive, right negative.
     # ======================
     static_tf_node = Node(
         package='tf2_ros',
@@ -223,7 +223,7 @@ def generate_launch_description():
         name='static_baselink_to_laser',
         arguments=[
             '0.27', '0.0', '0.11',   # x y z
-            '3.141592653589793', '0.0', '0.0',  # yaw pitch roll; physical frame under review
+            '0.0', '0.0', '0.0',     # yaw pitch roll; measured published scan frame
             'base_link', 'laser'
         ],
         output='screen'

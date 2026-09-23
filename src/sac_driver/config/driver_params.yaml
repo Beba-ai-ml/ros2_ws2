@@ -27,9 +27,9 @@ sac_driver:
     # 2026-09-23: live parameters match this -90/-1 pair. Cardboard captures
     # indicate raw front near 0deg, left near +90deg, right near -90deg.
     # Thus sim angle a maps to raw scan angle 90-a. The housing orientation
-    # alone does not establish the published scan frame. Live TF still has
-    # yaw pi and Python fallbacks use +90; see the unresolved frame conflict
-    # in .context/RESEARCH-jetson-20260923.md before changing calibration.
+    # alone does not establish the published scan frame. TF yaw is now 0
+    # and Python fallbacks also use -90, following the front/left/right
+    # measurements in .context/RESEARCH-jetson-20260923.md.
     # CALIBRATION: re-run the cardboard test (left AND right, not only front)
     # after any change here - see docs/TROUBLESHOOTING.md.
     lidar.angle_offset_deg: -90.0

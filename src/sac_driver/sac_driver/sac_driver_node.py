@@ -126,10 +126,9 @@ class SACDriverNode(Node):
              95.0, 100.0, 105.0, 110.0, 115.0, 120.0, 125.0, 130.0, 135.0, 150.0, 165.0, 180.0, 195.0],
         )
         lidar_max_range_m = float(self._param("lidar.max_range_m", 20.0))
-        # Preserved fallback for a backwards raw frame; active YAML overrides
-        # this with -90. The discrepancy is tracked in the 2026-09-23 research
-        # report and is not a reason to change the car's calibration blindly.
-        lidar_angle_offset_deg = float(self._param("lidar.angle_offset_deg", 90.0))
+        # Match YAML and the measured raw frame: sim front (90deg) maps to
+        # raw front (0deg). See the 2026-09-23 cardboard captures.
+        lidar_angle_offset_deg = float(self._param("lidar.angle_offset_deg", -90.0))
         lidar_angle_direction = float(self._param("lidar.angle_direction", -1.0))
         lidar_use_interpolation = bool(self._param("lidar.use_interpolation", True))
 

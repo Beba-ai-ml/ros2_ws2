@@ -194,8 +194,9 @@ The lidar frame convention must match the simulator the policy was trained in:
 sim angle 90° = forward, sim 0° = the side the car turns to on a positive steer. On 2026-09-23
 live parameters and YAML use `lidar.angle_offset_deg: -90.0`, `lidar.angle_direction: -1.0`;
 `control.steer_sign` is `1.0` in YAML. Cardboard data supports raw front 0° and left +90°.
-The retained static TF yaw π, Python +90 fallbacks and four failing lidar parity tests assume
-the opposite raw frame. See [the research report](../.context/RESEARCH-jetson-20260923.md).
+Fresh front/left/right captures confirmed this raw frame. Static TF yaw is now 0 and
+Python fallbacks use -90; all 16 offline parity tests pass. Physical steering response still
+requires validation. See [the research report](../.context/RESEARCH-jetson-20260923.md).
 
 **Cardboard test, wheels off the ground — front alone is NOT enough** (a 90° rotated frame also
 "avoids" a frontal obstacle, that is how the wrong `offset 0` passed in March 2026):
