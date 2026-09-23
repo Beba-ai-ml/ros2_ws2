@@ -1,5 +1,84 @@
 # SAC Driver - Current State
 
+## 2026-09-23 16:01 - FINAL: save/push only; later AI request withdrawn
+
+Read **[HANDOFF-20260923-autonomia-jutro.md](HANDOFF-20260923-autonomia-jutro.md)** next.
+It records all observed problems, fixes, remaining uncertainties, evidence locations,
+reproducible low-speed configuration and the plan for tomorrow.
+
+The user briefly requested AI again and confirmed the car was on a clear ground area,
+then explicitly withdrew that request: **finish saving only; do not enable autonomy**.
+No AI/Bringup restart, enable service or drive command was issued by the assistant after
+that request. Only files for a future 0.5 trial and passive readbacks were prepared.
+At 16:00:56 and the following process check, panel-owned PIDs 96060/96247/96422/96551
+were all gone. Their shutdown was not performed by the assistant. Closed passive recorder
+97933 as well. **Final observed state: no session AI, Bringup/VESC driver or diagnostic
+monitor remains running. Do not restart anything today.**
+
+Latest sampled state before closure: lock true, RB/LB released, drive speed 0, ERPM 0,
+fault 0, 11.1 V. Files `*_latest.json` are historical snapshots. The main YAML remains
+at 2.0/2.0 m/s; the future test YAML at `log/driver_params_test_05.yaml` is 0.5/0.5 but was
+not applied to the late panel launch. Ground driving remains unvalidated. The documentation
+and all fixes are being pushed to `origin/fix/sim-parity-20260913`, not merged into main.
+
+## 2026-09-23 15:59 - user requests AI again; panel has already launched it
+
+After asking to finish for the day and save/push all documentation, the user requested
+AI for one more check. Process inspection found a new **panel-owned** Bringup 96060,
+VESC driver 96247 and AI process 96551 (parent ros2 run 96422). These are not the stopped
+terminal-owned launches below. Do not start duplicate hardware/AI processes.
+
+Direct GetParameters confirmed this panel AI uses the main YAML: **2.0/2.0 m/s** limits,
+cpu_threads 1, lidar gap 1.5, safe mode true, enable_on_start false. The assistant informed
+the user of the 2.0 limits and asked for RB released plus current raised-wheels/clear-area
+confirmation before any assisted restart with 0.5. No assisted motion command was issued.
+Fresh passive readback: lock true, all buttons released, ERPM 0, fault 0, about 11.1 V;
+scan 10 Hz, odom/telemetry/zero `/drive` about 50 Hz. Thus this fresh panel instance does
+receive lock callbacks under the default transport; DDS issues remain intermittent.
+
+Prepared `log/driver_params_test_05.yaml` from current source (both limits 0.5) and
+`log/fastdds_stand_trial_udp.xml` from the tested archive. They have not been applied to
+the panel AI. New passive recorder writes `log/stand_trial_20260923_155933.jsonl`.
+The end-of-day handoff is `HANDOFF-20260923-autonomia-jutro.md`; documentation push is
+being completed. Current physical-condition confirmation is pending.
+
+## 2026-09-23 15:55 - original diagnostic session closed and archived
+
+On the user's finish-for-today request, stopped Bringup 67623 and both passive monitors.
+All known child PIDs exited, including VESC/lidar/mux/joy/TF; `key_drive.service` remained
+inactive and disabled. VESC and lidar shut down cleanly. Joy mode manager reported
+KeyboardInterrupt (-2), and joy_linux_node reported RCLError during shutdown (-6), with
+no remaining process. These shutdown errors are recorded for follow-up, not fixed today.
+Archived 14 temporary support files under `log/session_20260923_support/` with SHA256
+manifest so a reboot does not lose the diagnostic scripts, test YAML and UDP profile.
+This closed session was later followed by the new panel launches described above.
+
+## 2026-09-23 15:53 - user confirms both steering directions after lidar repair
+
+The user confirmed that both repeated left-box tests steered right from the start and
+stopped on RB release, then explicitly reported that both right and left directions work.
+This closes the stand check of physical steering directions after the missing-return fix.
+It does not establish ground-driving performance or obstacle braking by the learned policy.
+
+Seven recorded RB windows (15:51:12–15:52:37) had bounded commands (max absolute speed
+0.5 m/s, motor command 925 ERPM), VESC fault 0, and roughly 58–60 Hz drive output. The
+motor zero command followed the received lock=true edge by 0.89–17.89 ms. These are
+subscriber receipt timings, not full mechanical stop times; several re-presses happened
+before wheel feedback had settled. Free-spinning feedback briefly reached 1432 ERPM
+(about 0.774 m/s equivalent), as in earlier tests despite the 0.5 command limit.
+318 recorded policy decisions: median 4.37 ms, p95 9.60 ms, max 33.26 ms. Some longer
+drive receipt gaps and steering changes during longer holds remain in the recording;
+the user's confirmation is of the stand response, not absence of all transient variation.
+
+Stopped the owned AI (90859) with RB released and ERPM 0, then closed the detailed recorder
+(90484). **AI is off**. Bringup **67623**, single VESC driver **67703**, passive ROS health
+monitor **65891** and USB monitor **71336** remain running. Final sampled lock true,
+speed 0, fault 0, voltage about 11.1 V. Trial `*_latest.json` files are now historical.
+Code/build/tests were already pushed in **0a0562a** (37 tests passed); this update records
+the user's physical result. Ground driving requires a separate clear-area confirmation
+and explicit low-speed setup. The main YAML still defaults to 2.0 m/s; the stand's
+0.5/0.5 limits came from the temporary trial YAML and do not apply to a normal panel launch.
+
 ## 2026-09-23 15:49 - lidar missing-return repair built, stand retest in progress
 
 Collected 150 full raw scans per side with the user's confirmed box positions and AI off:

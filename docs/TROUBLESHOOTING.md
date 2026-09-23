@@ -195,8 +195,9 @@ sim angle 90° = forward, sim 0° = the side the car turns to on a positive stee
 live parameters and YAML use `lidar.angle_offset_deg: -90.0`, `lidar.angle_direction: -1.0`;
 `control.steer_sign` is `1.0` in YAML. Cardboard data supports raw front 0° and left +90°.
 Fresh front/left/right captures confirmed this raw frame. Static TF yaw is now 0 and
-Python fallbacks use -90; all 16 offline parity tests pass. Physical steering response still
-requires validation. See [the research report](../.context/RESEARCH-jetson-20260923.md).
+Python fallbacks use -90; all 16 offline parity tests pass. The user confirmed both physical
+steering directions after the missing-return repair below. Ground driving remains untested.
+See [the research report](../.context/RESEARCH-jetson-20260923.md).
 
 **Cardboard test, wheels off the ground — front alone is NOT enough** (a 90° rotated frame also
 "avoids" a frontal obstacle, that is how the wrong `offset 0` passed in March 2026):
@@ -228,7 +229,6 @@ Replay of 150 raw scans per box side gave 150/150 initial actions away from the 
 physical validation and current runtime status are in `.context/STATE.md`.
 
 ## Car drives backwards
-
 
 `control.speed_sign` in `driver_params.yaml` and `SPEED_SIGN` in `scripts/key_drive.py` must
 both match the car's wiring. On this car positive `AckermannDrive.speed` = reverse, so both are

@@ -16,14 +16,19 @@ left raw +90°. Fresh user-confirmed front/left/right captures established the f
 TF yaw is now 0 and Python fallbacks match YAML -90. All 16 offline parity tests pass.
 Read `.context/RESEARCH-jetson-20260923.md` and the latest `.context/STATE.md`. After the
 earlier Bringup-only stage, the user confirmed raised wheels again and authorized stand
-tests. The current trial uses a temporary 0.5 m/s AI limit and the user's RB deadman.
+tests. Those trials used a temporary 0.5 m/s AI limit and the user's RB deadman.
 Stand trials confirmed forward wheel motion, RB stop and right steering away from a
 left-front box. Initial response to a right-front box was inconsistent; a passive probe
 reproduced steering variation from changing scans/max-range
 dropouts. The converter now preserves valid endpoints and repairs short bounded gaps
-within one scan (`lidar.max_invalid_gap_deg=1.5`); a stand retest is in progress.
+within one scan (`lidar.max_invalid_gap_deg=1.5`). The user confirmed both steering
+directions and RB stop in the retest; AI was then stopped. Bringup was stopped at day end.
 Resume timing was fixed and `model.cpu_threads=1` reduced latency. Ground driving is not
-authorized; read current state before starting nodes.
+authorized by the final instruction; read current state before starting nodes.
+
+**End-of-day instruction:** save/push only, no further autonomy. The late request to enable
+AI was withdrawn. At the final 16:01 check, the session and later panel launches were all
+stopped. Tomorrow start with `.context/HANDOFF-20260923-autonomia-jutro.md`.
 
 ## Key commands
 

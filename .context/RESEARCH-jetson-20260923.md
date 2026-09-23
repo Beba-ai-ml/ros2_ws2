@@ -4,16 +4,18 @@ Kontynuacja [HANDOFF-jetson_migracja_1.md](HANDOFF-jetson_migracja_1.md), wykona
 na Jetsonie. Pierwszy odczyt runtime zakończono około 14:44 czasu Europe/Warsaw;
 później przeprowadzono autoryzowane próby na podniesionych kołach. Jazdy po ziemi nie było.
 
-**Stan po 15:49:** VESC/odom działają, geometria lidar/TF jest skorygowana. Próby potwierdziły
+**Stan końcowy po 16:01:** geometria lidar/TF jest skorygowana. Próby potwierdziły
 ruszanie do przodu, stop RB i skręt od lewego boxa. Naprawiono skok przy wznowieniu oraz
 opóźnienia inferencji przez ustawienie jednego wątku CPU.
 Zmienna reakcja na prawy box została odtworzona bez ruchu: zmieniające się skany, zwłaszcza
 zaniki mapowane na 20 m, zmieniają kierunek pierwszej decyzji modelu. Wdrożono poprawną
 obsługę niepoprawnych sąsiadów interpolacji i uzupełnianie krótkich luk w pojedynczym skanie:
-replay **150/150 od boxa dla każdej strony**, **37/37 testów**, build OK. AI uruchomiono
-ponownie do próby na podniesionych kołach z limitem 0.5; wynik fizyczny jest oczekiwany.
-Bringup i pasywne monitorowanie VESC działają. Samodzielna jazda po ziemi pozostaje
-niezweryfikowana. Szczegóły aktualizacji są na końcu; pierwotny
+replay **150/150 od boxa dla każdej strony**, **37/37 testów**, build OK. Po próbie
+na podniesionych kołach z limitem 0.5 Wojtek potwierdził oba kierunki skrętu i stop RB.
+AI, Bringup i monitory są zatrzymane. Późniejsza prośba użytkownika o dodatkowe AI została
+wycofana; asystent niczego ponownie nie uruchomił. Jazda po ziemi pozostaje niezweryfikowana.
+Pełny plan na jutro i lista problemów: [HANDOFF-20260923-autonomia-jutro.md](HANDOFF-20260923-autonomia-jutro.md).
+Szczegóły aktualizacji są na końcu; pierwotny
 audyt poniżej opisuje stan około 14:44 i wcześniejsze usterki.
 
 ## Wynik
@@ -539,3 +541,65 @@ watchdog **0.5 s**. Wszystkie wartości potwierdzono przez GetParameters. Bringu
 VESC driver nie były restartowane. Recorder zapisuje
 `log/stand_trial_20260923_154832.jsonl`, inferencję `log/stand_lidar_fix_inference_20260923.jsonl`.
 Poproszono o dwie krótkie próby RB przy lewym boxie; fizyczny wynik jest jeszcze oczekiwany.
+
+### Potwierdzenie fizyczne po poprawce, 15:53
+
+Wojtek potwierdził obie powtórzone próby przy lewym boxie: od początku skręt w prawo i
+stop po puszczeniu RB. Następnie osobno napisał, że działa skręt w prawo i w lewo.
+Potwierdzenie użytkownika zamyka sprawdzenie kierunków na podniesionych kołach po poprawce
+lidaru; nie jest dowodem ukończenia jazdy po ziemi ani hamowania przed przeszkodą.
+
+Recorder zawiera siedem okien RB między 15:51:12 a 15:52:37. Komendy pozostały w limicie
+**0.5 m/s / 925 ERPM**, VESC **fault 0**; częstość komend około **58–60 Hz**. Komenda
+silnika zerowała się **0.89–17.89 ms** po odebraniu lock=true. W niektórych próbach RB
+ponownie naciśnięto przed ustaniem obrotów, więc nie należy z nich wyznaczać pełnego czasu
+mechanicznego zatrzymania. Nieobciążone koła osiągały przejściowo do **1432 ERPM**, czyli
+około **0.774 m/s** w odometrii, mimo ograniczenia komendy do 0.5 m/s.
+
+318 zmierzonych decyzji sieci: mediana **4.37 ms**, p95 **9.60 ms**, maksimum **33.26 ms**.
+Zapis nadal zawiera pojedyncze dłuższe odstępy odbioru oraz zmiany znaku skrętu podczas
+niektórych dłuższych przytrzymań; wynik nie oznacza całkowitego braku stanów przejściowych.
+
+Po potwierdzeniu RB puszczonego i ERPM=0 zatrzymano własne AI 90859 i recorder 90484.
+Pozostają Bringup 67623, jeden driver VESC 67703, pasywny monitor ROS 65891 i USB 71336.
+Ostatni odczyt: lock true, ERPM 0, fault 0, około 11.1 V. Zmiana kodu jest na GitHubie
+w **0a0562a**, z 37 przechodzącymi testami i zgodnym buildem. Zwykły start z panelu nadal
+używa domyślnego YAML **2.0 m/s**; próbny limit **0.5/0.5** był w osobnym tymczasowym pliku.
+Przed jazdą po ziemi potrzebne są osobne potwierdzenie wolnego miejsca i ustawienie małego
+limitu. AI pozostaje wyłączone.
+
+## Zamknięcie dnia i odwołana dodatkowa prośba, 15:55–16:01
+
+Wojtek poprosił o zakończenie prób, pełne zapisanie dokumentów i problemów oraz push na
+GitHub. O 15:55 zatrzymano własny Bringup i oba monitory. Zweryfikowano zakończenie
+wszystkich znanych dzieci; VESC, lidar i mux wyszły poprawnie. Joy mode manager zakończył
+się KeyboardInterrupt (-2), joy_linux_node błędem RCLError nieaktywnego kontekstu (-6).
+Nie pozostały osierocone procesy; problem ścieżki zamykania zapisano na jutro.
+
+Przy odebraniu zaległego stdout Bringupu ujawniły się również starsze logi około 15:22:
+komendy do -9250 ERPM były obcinane do -3525. To okres sprzed zapisanych prób AI z limitem
+0.5. Źródła tych komend nie zarejestrowano; ich wielkość odpowiada skali -5.0 w teleop.
+W handoffie zapisano, że limit AI nie ogranicza ręcznej ścieżki LB — przed jazdą po ziemi
+trzeba ustawić/zweryfikować ją osobno.
+
+Zarchiwizowano 14 skryptów, profili i YAML z `/tmp` do `log/session_20260923_support/`,
+z manifestem rozmiarów i SHA256. Surowe logi pozostają lokalnie, zgodnie z regułą repo;
+pełne wyniki, problemy i instrukcje odtworzenia są w dokumentach przeznaczonych do GitHuba.
+
+Następnie użytkownik poprosił jeszcze o AI. Sprawdzenie wykazało, że panel już uruchomił
+własny Bringup 96060/VESC 96247 i AI 96551 (parent 96422). Asystent ich nie uruchamiał.
+GetParameters pokazał **2.0/2.0 m/s** z głównego YAML; użytkownika poinformowano i poproszono
+o puszczony RB. Odczyt pasywny: lock true, drive=0, ERPM=0, fault=0. Nowe AI odbierało
+lock w domyślnym DDS; wcześniejsza awaria komunikacji nie jest stała dla każdego startu.
+Przygotowano wyłącznie pliki przyszłej konfiguracji 0.5; nie zastosowano ich do panelu.
+
+Po potwierdzeniu auta na ziemi użytkownik wyraźnie **odwołał** prośbę: tylko dokończyć
+zapisywanie i nie włączać autonomii. Nie uruchomiono ani nie zrestartowano żadnego sterownika
+ani AI, nie wywołano enable i nie opublikowano komend ruchu po tej dodatkowej prośbie.
+O 16:00:56 i w kolejnym sprawdzeniu późniejsze PID-y panelu już nie działały; nie zostały
+zatrzymane przez asystenta. Zamknięto nowy pasywny recorder 97933. **Stan końcowy: AI,
+Bringup i monitory diagnostyczne zatrzymane; nie uruchamiać ponownie dzisiaj.**
+
+Następna sesja zaczyna się od [HANDOFF-20260923-autonomia-jutro.md](HANDOFF-20260923-autonomia-jutro.md).
+Dokument zawiera listę problemów i statusów, poprawki, testy zaliczone i otwarte,
+konfigurację, odtworzenie limitu 0.5/profilu UDP, mapę dowodów oraz plan prób na jutro.

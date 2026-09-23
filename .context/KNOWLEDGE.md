@@ -346,8 +346,9 @@ KEEP_BRINGUP=1 ~/ros2_ws/scripts/key_drive.sh   # leave bringup running
 - **Current YAML:** `speed_sign=-1.0`, `steer_sign=+1.0`, `angle_offset_deg=-90.0`,
   `angle_direction=-1.0`; lidar values also confirmed live. The stand trial confirmed
   forward motion, RB stop and steering away from the left-front box. Right-front response
-  was inconsistent; a passive probe reproduced this from scan/max-range variation.
-  No filter is deployed; see the 2026-09-23 report before attempting ground driving.
+  was initially inconsistent; a passive probe reproduced this from scan/max-range
+  variation. After current-scan missing-return repair, the user confirmed both physical
+  steering directions and RB stop. Ground driving remains untested; see the 2026-09-23 report.
 - **Old 27-ray model (`driver_params_27ray.yaml`):** `steer_sign=-1.0`, `angle_offset_deg=-90.0`,
   `angle_direction=+1.0` — a mirrored but self-consistent pair. That profile is NOT loadable by
   the current node any more (different state layout).

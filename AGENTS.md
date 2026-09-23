@@ -36,11 +36,17 @@ working inside this repository.
     A passive probe reproduced scan-dependent steering changes, with intermittent nearby
     returns mapped to 20 m. The converter now preserves valid interpolation endpoints and
     repairs bounded gaps up to `lidar.max_invalid_gap_deg=1.5` within the current scan.
-    Replay gives 150/150 correct initial directions per side; physical retest is in progress.
+    Replay gives 150/150 correct initial directions per side. The user confirmed both
+    physical steering directions and RB stop in the retest; AI was then stopped.
     Resume timing was fixed and
     `model.cpu_threads=1` reduced inference latency. This authorization covers stand testing,
     not driving on the ground. Keep the deadman/watchdog and read the latest
     `.context/STATE.md` before starting anything; bringup/AI may already run outside the panel.
+13. **Final 2026-09-23 instruction:** finish documentation and push; do not enable autonomy.
+    The user's late request for one more run was explicitly withdrawn. All session-owned
+    processes were stopped, and the later panel launches were also gone at the final check.
+    Start the next session with `.context/HANDOFF-20260923-autonomia-jutro.md` and fresh
+    hardware-state checks; no ground-driving validation was completed today.
 
 ## Repo map — edit here / do not edit
 
