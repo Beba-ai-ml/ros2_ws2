@@ -9,6 +9,14 @@ stays on the PC; the repo contains the ~5 MB export that `policy_loader.py` can 
 The current lidar parity is unchanged and authoritative: `offset=-90`, `direction=-1`,
 `steer_sign=+1`; offline tests pass, but the physical left/right cardboard test is still pending.
 
+## 2026-09-23 - read-only ROS input diagnostic
+Added `tools/ros2_input_diagnostic.py`. It subscribes to `/scan`, `/odom`, `/drive`, and
+`/commands/servo/position`; reports raw nearest scan angle, the nearest ray after the AI converter,
+message ages/rate, odometry signs, drive command, and servo value. It only reads topics and uses
+the checked-in `driver_params.yaml` for the AI-ray estimate. Side labels assume `laser` yaw is 0
+relative to `base_link`; the physical scan orientation and active runtime parameter overrides still
+need to be checked on the car.
+
 ## 🔴 2026-09-13 — sim↔car parity fix, NOT YET DRIVEN ON THE CAR
 Branch `fix/sim-parity-20260913`. Review with evidence: `.context/review-jazda-ai-20260913.md`.
 Fixed four hard mismatches between the node and the training simulator (all four were enough on
