@@ -4,6 +4,7 @@
 Run from the workspace root after sourcing ROS 2 and the workspace setup:
     python3 tools/ros2_input_diagnostic.py
     python3 tools/ros2_input_diagnostic.py --angle-offset 90 --angle-direction -1
+    python3 tools/ros2_input_diagnostic.py --capture --angle-offset 90 --angle-direction -1
 
 This node only subscribes. It does not publish commands or start other nodes.
 Pass the active lidar parameters from `ros2 param get /sac_driver ...` to match the
@@ -13,8 +14,11 @@ running AI node. Without overrides, the checked-in driver_params.yaml is used.
 from __future__ import annotations
 
 import argparse
+import datetime
+import json
 import math
 import sys
+import threading
 import time
 from collections import deque
 from pathlib import Path
@@ -25,6 +29,7 @@ import rclpy
 import yaml
 from ackermann_msgs.msg import AckermannDriveStamped
 from nav_msgs.msg import Odometry
+from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Float64
@@ -85,6 +90,7 @@ class InputDiagnostic(Node):
         report_interval_sec: float = 1.0,
         angle_offset_override: Optional[float] = None,
         angle_direction_override: Optional[float] = None,
+        capture_mode: bool = False,
     ) -> None:
         super().__init__("ros2_input_diagnostic")
         params = _load_lidar_config()
@@ -121,6 +127,8 @@ class InputDiagnostic(Node):
         self.scan_received_monotonic: Optional[float] = None
         self.scan_receive_intervals = deque(maxlen=12)
         self._last_scan_received_monotonic: Optional[float] = None
+        self._condition = threading.Condition()
+        self._scan_sequence = 0
         self.odom: Optional[Odometry] = None
         self.odom_received_monotonic: Optional[float] = None
         self.drive: Optional[AckermannDriveStamped] = None
@@ -132,7 +140,9 @@ class InputDiagnostic(Node):
         self.odom_sub = self.create_subscription(Odometry, self.odom_topic, self._on_odom, 10)
         self.drive_sub = self.create_subscription(AckermannDriveStamped, self.drive_topic, self._on_drive, 10)
         self.servo_sub = self.create_subscription(Float64, self.servo_topic, self._on_servo, 10)
-        self.report_timer = self.create_timer(max(0.25, float(report_interval_sec)), self.report)
+        self.report_timer = None
+        if not capture_mode:
+            self.report_timer = self.create_timer(max(0.25, float(report_interval_sec)), self.report)
 
         self.get_logger().info(
             "Read-only subscriptions active: scan=%s odom=%s drive=%s servo=%s"
@@ -150,25 +160,186 @@ class InputDiagnostic(Node):
         )
     def _on_scan(self, msg: LaserScan) -> None:
         now = time.monotonic()
-        if self._last_scan_received_monotonic is not None:
-            interval = now - self._last_scan_received_monotonic
-            if interval > 0.0:
-                self.scan_receive_intervals.append(interval)
-        self._last_scan_received_monotonic = now
-        self.scan_received_monotonic = now
-        self.scan = msg
+        with self._condition:
+            if self._last_scan_received_monotonic is not None:
+                interval = now - self._last_scan_received_monotonic
+                if interval > 0.0:
+                    self.scan_receive_intervals.append(interval)
+            self._last_scan_received_monotonic = now
+            self.scan_received_monotonic = now
+            self.scan = msg
+            self._scan_sequence += 1
+            self._condition.notify_all()
 
     def _on_odom(self, msg: Odometry) -> None:
-        self.odom = msg
-        self.odom_received_monotonic = time.monotonic()
+        with self._condition:
+            self.odom = msg
+            self.odom_received_monotonic = time.monotonic()
 
     def _on_drive(self, msg: AckermannDriveStamped) -> None:
-        self.drive = msg
-        self.drive_received_monotonic = time.monotonic()
+        with self._condition:
+            self.drive = msg
+            self.drive_received_monotonic = time.monotonic()
 
     def _on_servo(self, msg: Float64) -> None:
-        self.servo = msg
-        self.servo_received_monotonic = time.monotonic()
+        with self._condition:
+            self.servo = msg
+            self.servo_received_monotonic = time.monotonic()
+
+    def capture_after(
+        self,
+        after_sequence: int,
+        timeout_sec: float,
+        label: str,
+        fresh_scan_count: int = 2,
+    ) -> Optional[dict]:
+        """Capture after two post-prompt scans, avoiding a sweep already in progress."""
+        deadline = time.monotonic() + float(timeout_sec)
+        target_sequence = after_sequence + max(1, int(fresh_scan_count))
+        with self._condition:
+            while self._scan_sequence < target_sequence:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0.0 or not rclpy.ok():
+                    return None
+                self._condition.wait(remaining)
+
+            scan = self.scan
+            scan_sequence = self._scan_sequence
+            scan_received = self.scan_received_monotonic
+            scan_intervals = list(self.scan_receive_intervals)
+            odom = self.odom
+            odom_received = self.odom_received_monotonic
+            drive = self.drive
+            drive_received = self.drive_received_monotonic
+            servo = self.servo
+            servo_received = self.servo_received_monotonic
+
+        if scan is None:
+            return None
+
+        captured_monotonic = time.monotonic()
+
+        def age_ms(received: Optional[float]) -> Optional[float]:
+            if received is None:
+                return None
+            return round((captured_monotonic - received) * 1000.0, 1)
+
+        raw_index, raw_angle, raw_distance = _range_summary(scan)
+        model_ranges = self.converter.convert(scan)
+        model_index = int(model_ranges.argmin())
+        model_distance = float(model_ranges[model_index]) * self.max_range_m
+        model_angle = float(self.converter.target_angles_deg[model_index])
+        expected_ros_angle = _wrap_degrees(
+            self.angle_direction * (model_angle + self.angle_offset_deg)
+        )
+
+        stamp_ns = int(scan.header.stamp.sec) * 1000000000 + int(scan.header.stamp.nanosec)
+        now_ns = self.get_clock().now().nanoseconds
+        header_age_ms = None
+        if stamp_ns > 0:
+            delta_ms = (now_ns - stamp_ns) / 1000000.0
+            if 0.0 <= delta_ms < 60000.0:
+                header_age_ms = round(delta_ms, 1)
+
+        def finite_ranges(values):
+            result = []
+            for value in values:
+                number = float(value)
+                result.append(number if math.isfinite(number) else None)
+            return result
+
+        raw_nearest = None
+        if raw_index is not None:
+            raw_nearest = {
+                "index": raw_index,
+                "angle_deg": raw_angle,
+                "sector_if_laser_yaw_is_zero": _assumed_sector(raw_angle),
+                "distance_m": raw_distance,
+            }
+
+        ai_nearest = {
+            "index": model_index,
+            "sim_angle_deg": model_angle,
+            "sampled_ros_angle_deg": expected_ros_angle,
+            "sector_if_laser_yaw_is_zero": _assumed_sector(expected_ros_angle),
+            "distance_m": model_distance,
+            "clear_to_max_range": model_distance >= self.max_range_m * 0.99,
+        }
+
+        scan_rate_hz = None
+        if scan_intervals:
+            interval_mean = mean(scan_intervals)
+            if interval_mean > 0.0:
+                scan_rate_hz = round(1.0 / interval_mean, 2)
+
+        record = {
+            "label": label,
+            "captured_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "scan_sequence": scan_sequence,
+            "topics": {
+                "scan": self.scan_topic,
+                "odom": self.odom_topic,
+                "drive": self.drive_topic,
+                "servo": self.servo_topic,
+            },
+            "converter": {
+                "source": self.converter_config_source,
+                "angle_offset_deg": self.angle_offset_deg,
+                "angle_direction": self.angle_direction,
+                "max_range_m": self.max_range_m,
+                "target_ray_count": len(self.converter.target_angles_deg),
+            },
+            "scan": {
+                "frame_id": scan.header.frame_id,
+                "stamp_sec": int(scan.header.stamp.sec),
+                "stamp_nanosec": int(scan.header.stamp.nanosec),
+                "header_age_ms": header_age_ms,
+                "receive_age_ms": age_ms(scan_received),
+                "receive_rate_hz": scan_rate_hz,
+                "angle_min_rad": float(scan.angle_min),
+                "angle_max_rad": float(scan.angle_max),
+                "angle_increment_rad": float(scan.angle_increment),
+                "scan_time_sec": float(scan.scan_time),
+                "time_increment_sec": float(scan.time_increment),
+                "range_min_m": float(scan.range_min),
+                "range_max_m": float(scan.range_max),
+                "raw_nearest": raw_nearest,
+                "ranges_m": finite_ranges(scan.ranges),
+            },
+            "ai_lidar": {
+                "nearest": ai_nearest,
+                "normalized_ranges": [float(value) for value in model_ranges],
+            },
+            "odom": None,
+            "drive": None,
+            "servo_position": None,
+        }
+
+        if odom is not None:
+            record["odom"] = {
+                "frame_id": odom.header.frame_id,
+                "child_frame_id": odom.child_frame_id,
+                "receive_age_ms": age_ms(odom_received),
+                "linear_x_mps": float(odom.twist.twist.linear.x),
+                "angular_z_rad_s": float(odom.twist.twist.angular.z),
+            }
+        if drive is not None:
+            record["drive"] = {
+                "receive_age_ms": age_ms(drive_received),
+                "speed_mps": float(drive.drive.speed),
+                "steering_angle_rad": float(drive.drive.steering_angle),
+                "acceleration_mps2": float(drive.drive.acceleration),
+            }
+        if servo is not None:
+            record["servo_position"] = {
+                "receive_age_ms": age_ms(servo_received),
+                "value": float(servo.data),
+            }
+        return record
+
+    def scan_sequence(self) -> int:
+        with self._condition:
+            return self._scan_sequence
 
     @staticmethod
     def _age_ms(received_monotonic: Optional[float]) -> str:
@@ -301,6 +472,16 @@ def main() -> None:
         help="active lidar.angle_direction from /sac_driver (default: source YAML)",
     )
     parser.add_argument("--report-interval-sec", type=float, default=1.0)
+    parser.add_argument(
+        "--capture",
+        action="store_true",
+        help="press Enter to save one fresh scan/odometry snapshot per cardboard position",
+    )
+    parser.add_argument(
+        "--output",
+        default=None,
+        help="JSONL output path in capture mode (default: workspace log/ with a timestamp)",
+    )
     args, ros_args = parser.parse_known_args()
 
     rclpy.init(args=ros_args)
@@ -308,14 +489,79 @@ def main() -> None:
         report_interval_sec=args.report_interval_sec,
         angle_offset_override=args.angle_offset,
         angle_direction_override=args.angle_direction,
+        capture_mode=args.capture,
     )
+    if not args.capture:
+        try:
+            rclpy.spin(node)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            node.destroy_node()
+            rclpy.shutdown()
+        return
+
+    if args.output:
+        output_path = Path(args.output).expanduser()
+        if not output_path.is_absolute():
+            output_path = WORKSPACE_ROOT / output_path
+    else:
+        stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = WORKSPACE_ROOT / "log" / ("ros2_input_diag_%s.jsonl" % stamp)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    executor = SingleThreadedExecutor()
+    executor.add_node(node)
+    spin_thread = threading.Thread(target=executor.spin, daemon=True)
+    spin_thread.start()
+    capture_number = 0
+    print(
+        "\nCapture mode is read-only. Keep the car stationary and autonomy locked (RB released)."
+    )
+    print("Position one cardboard target at a time.")
+    print("Type an optional label (front/left/right/rear), then press Enter. Type q to finish.")
+    print("Each capture waits for two fresh /scan messages, then appends one JSONL record to:")
+    print("  %s\n" % output_path)
+
     try:
-        rclpy.spin(node)
+        while rclpy.ok():
+            try:
+                label = input("Target position [Enter captures, q quits]: ").strip()
+            except EOFError:
+                break
+            if label.lower() in ("q", "quit", "exit"):
+                break
+
+            after_sequence = node.scan_sequence()
+            print("Waiting for two fresh /scan messages...")
+            record = node.capture_after(after_sequence, timeout_sec=3.0, label=label)
+            if record is None:
+                print("No fresh /scan arrived within 3 seconds; nothing saved.\n")
+                continue
+
+            capture_number += 1
+            record["capture_number"] = capture_number
+            with output_path.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps(record, ensure_ascii=False, allow_nan=False) + "\n")
+                stream.flush()
+
+            raw = record["scan"]["raw_nearest"]
+            ai = record["ai_lidar"]["nearest"]
+            raw_text = "none" if raw is None else "%.1f deg / %.2f m" % (
+                raw["angle_deg"], raw["distance_m"]
+            )
+            ai_text = "ray %d / %.2f m" % (ai["index"], ai["distance_m"])
+            print(
+                "Saved #%d (%s): raw %s; AI %s\n"
+                % (capture_number, label or "unlabeled", raw_text, ai_text)
+            )
     except KeyboardInterrupt:
         pass
     finally:
+        executor.shutdown(timeout_sec=1.0)
         node.destroy_node()
         rclpy.shutdown()
+        spin_thread.join(timeout=1.0)
 
 
 if __name__ == "__main__":

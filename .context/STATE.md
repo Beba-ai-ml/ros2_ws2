@@ -16,7 +16,9 @@ message ages/rate, odometry signs, drive command, and servo value. It only reads
 the checked-in `driver_params.yaml` for the AI-ray estimate by default; `--angle-offset` and
 `--angle-direction` can override it with live values from `ros2 param get`. Side labels assume
 `laser` yaw is 0 relative to `base_link`; the physical scan orientation still needs to be checked
-on the car.
+on the car. `--capture` prompts for one cardboard position per Enter, waits for two fresh scans so
+the next capture is not a sweep already in progress, then appends raw ranges, converted AI rays,
+odometry, drive, and servo values to `log/*.jsonl`.
 
 ## 🔴 2026-09-13 — sim↔car parity fix, NOT YET DRIVEN ON THE CAR
 Branch `fix/sim-parity-20260913`. Review with evidence: `.context/review-jazda-ai-20260913.md`.
