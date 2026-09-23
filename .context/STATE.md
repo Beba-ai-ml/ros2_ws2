@@ -20,6 +20,11 @@ on the car. `--capture` prompts for one cardboard position per Enter, waits for 
 the next capture is not a sweep already in progress, then appends raw ranges, converted AI rays,
 odometry, drive, and servo values to `log/*.jsonl`.
 
+Conversation and Jetson follow-up details are in `.context/HANDOFF-jetson_migracja_1.md`. The
+runtime values reported during the user's capture and later screenshot conflict (`+90/-1` versus
+`-90/-1`); the captured AI ray is a diagnostic-side conversion, not proof of the active network
+input. Re-query the running Jetson node before changing calibration or restarting AI.
+
 ## 🔴 2026-09-13 — sim↔car parity fix, NOT YET DRIVEN ON THE CAR
 Branch `fix/sim-parity-20260913`. Review with evidence: `.context/review-jazda-ai-20260913.md`.
 Fixed four hard mismatches between the node and the training simulator (all four were enough on
