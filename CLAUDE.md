@@ -10,10 +10,11 @@ This is a ROS2 Foxy workspace for a physical F1TENTH racing car (Jetson Orin Nan
 
 The default policy is the policy-only export from
 `occupancy_racer/Soft_Actor_Critic_2/runs/session_Sesja_mpo2_2/`, trained on `mpo2`
-(7,131 episodes, peak mean_100 195 m). Current lidar parity is
-`angle_offset_deg=-90`, `angle_direction=-1`, `steer_sign=+1`; do not replace this with
-the old `offset=0` convention. Verify with `src/sac_driver/test/test_sim_parity.py` and
-the left/right cardboard test before any physical drive.
+(7,131 episodes, peak mean_100 195 m). The lidar is physically mounted backwards (180°),
+so current parity is `angle_offset_deg=+90`, `angle_direction=-1`, `steer_sign=+1`,
+with static TF `base_link -> laser` yaw π. Verify with
+`src/sac_driver/test/test_sim_parity.py` and the left/right cardboard test before any
+physical drive.
 
 ## Key commands
 

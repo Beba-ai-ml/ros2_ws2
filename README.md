@@ -133,8 +133,9 @@ If your car drives forward on a positive speed, flip both to `+1.0`.
 **6. Cardboard steering test.** With the car on the stand and the SAC driver enabled, hold a
 large piece of cardboard close to **one** side of the lidar. The wheels must steer **away**
 from the obstacle. If they steer **into** it, the lidar frame convention is wrong — change
-`lidar.angle_offset_deg` (`-90.0` with `angle_direction: -1.0` for the current 450-ray
-models) and/or `control.steer_sign` (`1.0` on this car). Re-test after every change.
+`lidar.angle_offset_deg` (`+90.0` with `angle_direction: -1.0` because this lidar is mounted
+180° backwards) and/or `control.steer_sign` (`1.0` on this car). The bringup static TF must
+also use `base_link -> laser` yaw `π`. Re-test after every change.
 
 **7. Calibrate `src/f1tenth_stack/config/vesc.yaml`** for your motor and servo:
 
@@ -198,7 +199,7 @@ still at the default `2.0`.
 | `joy_teleop` | `joy_teleop` (patched copy) | `/joy` → `/teleop` |
 | `joy_mode_manager` | `f1tenth_stack` | deadman gating, `/teleop_gated`, `/autonomy_lock` |
 | `ackermann_mux` | `ackermann_mux` | priority mux → `ackermann_cmd` |
-| `static_transform_publisher` | `tf2_ros` | `base_link` → `laser` (0.27, 0, 0.11) |
+| `static_transform_publisher` | `tf2_ros` | `base_link` → `laser` (0.27, 0, 0.11, yaw π; lidar mounted backwards) |
 
 Notes:
 
@@ -238,8 +239,8 @@ the parts that can be checked offline (`python3 test/test_sim_parity.py` inside 
 
 1. **Lidar Converter** — extracts the same 450 angles the simulator casts (0.5° steps over
    0°-180°, 2.0° over the rear), maps simulator angles to the ROS scan frame
-   (sim 90° = forward, sim 0° = the side a positive steer turns to; `angle_direction -1`,
-   `angle_offset_deg -90`), normalizes distances to [0, 1] (max 20 m), interpolates.
+   (sim 90° = forward, sim 0° = the side a positive steer turns to; for this backwards-mounted
+   lidar `angle_direction -1`, `angle_offset_deg +90`), normalizes distances to [0, 1] (max 20 m), interpolates.
 
 2. **State Builder** — builds the 455-element observation exactly like `_build_observation`:
    - `[0-449]` — 450 lidar rays (distance / 20.0, clipped [0,1])
@@ -388,8 +389,8 @@ model.device: "cpu"
 model.weights_only: false
 lidar.front_step_deg: 0.5        # variable-resolution lidar (450 rays)
 lidar.rear_step_deg: 2.0
-lidar.angle_offset_deg: -90.0    # sim 90 deg = forward -> ROS 0
-lidar.angle_direction: -1.0      # sim 0 deg = positive-steer side -> ROS +90 (left)
+lidar.angle_offset_deg: 90.0     # raw laser 180 deg = car front (physical mount yaw π)
+lidar.angle_direction: -1.0      # preserves simulator ray order; sim 0 = car left
 lidar.max_range_m: 20.0
 state.stack_frames: 4
 state.max_speed_mps: 2.5         # training physics max_speed

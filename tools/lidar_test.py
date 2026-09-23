@@ -82,7 +82,7 @@ def main():
                   f"[{min(angles):+.0f} to {max(angles):+.0f}]")
 
     print('='*70)
-    print('Lidar frame: 0deg=front, +90=left, -90=right, +/-180=rear')
+    print('Raw lidar frame on this car: 0deg=rear, -90=car left, +90=car right, +/-180=front')
     print(f'Total scans: {len(node.scans)}')
     node.destroy_node()
     rclpy.shutdown()

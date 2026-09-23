@@ -15,10 +15,10 @@
     duty_cycle_max: 0.0
     current_min: 0.0
     current_max: 100.0
-    brake_min: -20000.0
-    brake_max: 200000.0
-    speed_min: -45250.0
-    speed_max: 45250.0
+    brake_min: -35000.0
+    brake_max: 35000.0
+    speed_min: -3525.0
+    speed_max: 3525.0
     position_min: 0.0
     position_max: 0.0
     servo_min: 0.05

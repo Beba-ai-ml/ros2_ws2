@@ -213,7 +213,8 @@ def generate_launch_description():
     )
 
     # ======================
-    # 5. Statyczny TF base_link -> laser (oryginalny lidar)
+    # 5. Statyczny TF base_link -> laser
+    #    S1 is physically mounted backwards (yaw 180deg around Z).
     # ======================
     static_tf_node = Node(
         package='tf2_ros',
@@ -221,7 +222,7 @@ def generate_launch_description():
         name='static_baselink_to_laser',
         arguments=[
             '0.27', '0.0', '0.11',   # x y z
-            '0.0', '0.0', '0.0',     # roll pitch yaw
+            '3.141592653589793', '0.0', '0.0',  # yaw pitch roll; lidar mounted backwards
             'base_link', 'laser'
         ],
         output='screen'
@@ -247,7 +248,7 @@ def generate_launch_description():
     )
 
     # ======================
-    # 7. Rotated scan republisher (yaw +30 deg)
+    # 7. Finish launch description
     # ======================
     # Dodajemy wszystkie nody do launch description
     for node in [

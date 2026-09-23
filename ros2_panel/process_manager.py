@@ -15,12 +15,12 @@ PROCESS_DEFINITIONS = {
     0: {
         "name": "SETUP",
         "command": (
-            # Device permissions need root; sudo -n relies on /etc/sudoers.d/f1tenth
-            # installed by install.sh (no password prompt, no password in this file).
-            "sudo -n chmod 666 /dev/rplidar 2>/dev/null; sudo -n chmod 666 /dev/vesc 2>/dev/null; "
+            # The panel setup does not depend on the optional LED strip.
+            # Device nodes are optional too, so only chmod them when present.
             f"source {ROS_DISTRO_SETUP} && "
             f"source {WS_ROOT}/install/setup.bash && "
-            f"python3 {WS_ROOT}/scripts/ledy.py &"
+            "if [ -e /dev/rplidar ]; then sudo -n chmod 666 /dev/rplidar; fi && "
+            "if [ -e /dev/vesc ]; then sudo -n chmod 666 /dev/vesc; fi"
         ),
     },
     1: {

@@ -24,9 +24,10 @@ def _get_attr(obj: object, name: str):
 class LidarConverter:
     target_angles_deg: Sequence[float]
     max_range_m: float
-    # Current 450-ray simulator parity: sim angle a maps to ROS 90-a.
+    # Current 450-ray parity for this car: the physical lidar is mounted
+    # backwards, so sim angle a maps to the raw scan angle -(a + 90).
     # Legacy 27-ray callers must pass their historical values explicitly.
-    angle_offset_deg: float = -90.0
+    angle_offset_deg: float = 90.0
     angle_direction: float = -1.0
     use_interpolation: bool = True
 

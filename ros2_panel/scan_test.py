@@ -40,13 +40,13 @@ def main():
         closest_angle = angle_min_deg + closest * inc_deg
         print(f"Closest point: index {closest}, angle {closest_angle:.2f}°, dist {ranges[closest]:.3f} m")
         print(f"\nIf this object is DIRECTLY IN FRONT of the vehicle,")
-        print(f"then FRONT = {closest_angle:.1f}° in lidar frame.")
-        print(f"Current offset is -90°, meaning code assumes front = 0°.")
-        if abs(closest_angle) < 10:
-            print("=> Offset -90° looks CORRECT (front ≈ 0°)")
+        print(f"then FRONT = {closest_angle:.1f}° in the raw lidar frame.")
+        print(f"This car's lidar is mounted backwards: expected front ≈ ±180°;")
+        print(f"AI config uses angle_offset=+90° and static TF yaw=180°.")
+        if abs(abs(closest_angle) - 180.0) < 10:
+            print("=> Backwards lidar mount looks CORRECT (front ≈ ±180°)")
         else:
-            print(f"=> Offset should be {-90 - closest_angle:.1f}° instead of -90°")
-            print(f"   (need to shift by {-closest_angle:.1f}° more)")
+            print("=> This does not match the configured 180° mount; check physical orientation.")
 
     sub = node.create_subscription(LaserScan, '/scan', cb, 10)
     print("Put an object DIRECTLY IN FRONT of the vehicle, close (~20cm).")

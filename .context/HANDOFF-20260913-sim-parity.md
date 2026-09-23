@@ -16,7 +16,8 @@ HEAD `5b59934` = GitHub `occupancy-racer-sac2`). Cztery twarde rozjazdy, każdy 
 4. na aucie wczesne migawki (Rybnik 122k z 795k kroków; najsłabsza sesja rodziny, mean_100 65 m).
 
 ## Co jest zrobione (commit `b1c8673` na gałęzi, wypchnięty na GitHub, NIE scalony do `main`)
-- `driver_params.yaml`: `lidar.angle_offset_deg -90`, `lidar.angle_direction -1`, `state.max_speed_mps 2.5`,
+- `driver_params.yaml`: for the later-confirmed physical 180° lidar mount, `lidar.angle_offset_deg +90`,
+  `lidar.angle_direction -1`, `state.max_speed_mps 2.5`,
   `control.rate_hz 60` + `control.decision_every_n 8`, krzywa skrętu (`min_steering_angle_deg 5`,
   `steer_speed_ref_mps 8`), limity tempa jak w simie (120°/s, 18 m/s³). `speed_sign -1` i `steer_sign +1` bez zmian.
 - `state_builder.py`: układ `[lidar, kolizja=0, |v|/2.5, (steer+1)/2, accel/4, yaw/3]`, stack 4 ramek najstarsza pierwsza.
@@ -38,9 +39,8 @@ HEAD `5b59934` = GitHub `occupancy-racer-sac2`). Cztery twarde rozjazdy, każdy 
 - [ ] **H1. Wgrać gałąź na Jetsona:** `cd ~/ros2_ws && git fetch && git checkout fix/sim-parity-20260913 &&
   colcon build --packages-select sac_driver && . install/setup.bash`. Panel „AI Inference" buduje i odpala sam.
 - [ ] **H2. Koła w górę, test kartonem LEWO/PRAWO** (`docs/TROUBLESHOOTING.md`, rozdział „Car steers into obstacles"):
-  1. `python3 ros2_panel/scan_test.py`: karton z przodu → najbliższy punkt ~0°; z lewej → ~+90°. Jeśli przód wychodzi
-     na ±90° lub 180°, lidar stoi obrócony mechanicznie: przesunąć `lidar.angle_offset_deg` o tyle samo ORAZ yaw
-     w static tf `base_link -> laser` w `bringup_launch3.py`.
+  1. `python3 ros2_panel/scan_test.py`: przy fizycznym montażu 180° karton z przodu → najbliższy punkt ~±180°;
+     z lewej → ~-90°. Aktywny launch ma teraz static TF `base_link -> laser` yaw π, a AI offset +90°.
   2. Z węzłem AI: karton z przodu = minimum wektora 450 na indeksie 180, z lewej na 0, z prawej na 360.
   3. RB wciśnięty: karton z przodu-lewej → koła w PRAWO (`/commands/servo/position` > 0,53), z przodu-prawej → w LEWO.
      Lustrzanie przy zaliczonych 1-2 = zły znak `steering_angle_to_servo_gain` w `vesc.yaml` (dodatni kąt musi
@@ -66,5 +66,6 @@ HEAD `5b59934` = GitHub `occupancy-racer-sac2`). Cztery twarde rozjazdy, każdy 
 
 ## Czego nie zweryfikowano
 - Żywego auta (brak dostępu z PC). Cały dowód to analiza kodu + test offline + symulacja 16 ticków bez ROS.
-- Fizycznego montażu lidaru (static tf mówi yaw 0).
+- Żywego odczytu kartonu z `/scan` po zmianie (montaż 180° został potwierdzony przez użytkownika;
+  poprzedni static TF mówił yaw 0 i został skorygowany lokalnie na π).
 - Pochodzenia `best_mapa1_ep18000_clean.pth` (stary model 128-dim, nieaktywny).

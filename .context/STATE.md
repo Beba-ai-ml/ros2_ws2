@@ -6,8 +6,10 @@ The current default is `weights/session_Sesja_mpo2_2_policy.pth`, a policy-only 
 The source run used `mpo2`, 450-ray lidar, state 1820, stack 4 and action repeat 8; it logged
 7,131 episodes, peak mean_100 195 m and max single episode 256.6 m. The full training checkpoint
 stays on the PC; the repo contains the ~5 MB export that `policy_loader.py` can load on Jetson.
-The current lidar parity is unchanged and authoritative: `offset=-90`, `direction=-1`,
-`steer_sign=+1`; offline tests pass, but the physical left/right cardboard test is still pending.
+The current lidar parity is authoritative for the physical car mount: the S1 is rotated 180°
+around Z, so `offset=+90`, `direction=-1`, `steer_sign=+1`, and static TF `base_link -> laser`
+yaw is π. The same +90 fallback is now used by the Python converter/node when no YAML is
+provided. Offline tests pass; the physical left/right cardboard test is still pending.
 
 ## 🔴 2026-09-13 — sim↔car parity fix, NOT YET DRIVEN ON THE CAR
 Branch `fix/sim-parity-20260913`. Review with evidence: `.context/review-jazda-ai-20260913.md`.
@@ -32,7 +34,7 @@ old March cardboard verdict is not trustworthy (front-only test, garbled state c
   450-ray variable-resolution lidar, 1820-dim state, hidden [512,512,256]; alternatives
   `session_car_1_2_policy.pth` (R_01, 220 m) and `session_car_1_3_final_policy.pth`.
 - 450-angle lidar extraction with variable step (0.5° front, 2.0° rear), sim frame mapping
-  `ROS = 90° - sim` (`offset -90`, `direction -1`)
+  to the backwards-mounted raw scan (`raw = -(sim + 90°)`, `offset +90`, `direction -1`)
 - 4-frame stacking (1820-float state vector: 455 x 4 ticks at 60 Hz)
 - Observation per frame: [450 lidar, collision=0, speed_norm(/2.5), servo_norm(0..1), linear_accel, angular_vel]
 - Deadman switch via `/autonomy_lock` (hold RB to drive, release to stop); LB overrides
@@ -161,8 +163,8 @@ model.device: "cpu"
 model.weights_only: false
 lidar.front_step_deg: 0.5   # 450-ray variable resolution
 lidar.rear_step_deg: 2.0
-lidar.angle_offset_deg: -90.0  # sim 90 deg = forward
-lidar.angle_direction: -1.0    # sim 0 deg = positive-steer side = ROS left
+lidar.angle_offset_deg: 90.0   # physical lidar yaw π: raw ±180 deg = car front
+lidar.angle_direction: -1.0    # preserves simulator ray order; sim 0 deg = car left
 lidar.max_range_m: 20.0
 state.stack_frames: 4
 state.max_speed_mps: 2.5    # training physics max_speed
@@ -203,7 +205,9 @@ safety.watchdog_timeout_sec: 0.5
 - Default policy changed from `session_car_1_2_policy.pth` to the policy-only
   `session_Sesja_mpo2_2_policy.pth`, exported from the final `Sesja_mpo2_2` checkpoint.
 - `install.sh`, launch defaults, lidar diagnostic and current AI instructions now point to the
-  mpo2 policy. Lidar parity remains `offset=-90`, `direction=-1`, `steer_sign=+1`.
+  mpo2 policy. Lidar parity for the physical 180° mount is `offset=+90`, `direction=-1`,
+  `steer_sign=+1`, with static TF yaw π.
+- **Panel SETUP no longer depends on the optional LED strip** — removed the missing `~/ros2_ws/ledy.py`/SPI setup from all panel variants and made `/dev/rplidar` and `/dev/vesc` permission changes conditional on those devices existing.
 
 ### 2026-09-13
 - **Sim↔car parity fix** (see the red block at the top): lidar frame `offset -90 / direction -1`,

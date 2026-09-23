@@ -19,7 +19,7 @@ angles_450 = build_lidar_angles(0.5, 2.0)
 
 # Test offset choices while keeping the simulator's mirrored angle direction.
 CONFIGS = {
-    'production -90': LidarConverter(angles_450, max_range_m=20.0, angle_offset_deg=-90.0, angle_direction=-1.0),
+    'production +90': LidarConverter(angles_450, max_range_m=20.0, angle_offset_deg=90.0, angle_direction=-1.0),
     'offset=  0': LidarConverter(angles_450, max_range_m=20.0, angle_offset_deg=0.0, angle_direction=-1.0),
     'offset=+90': LidarConverter(angles_450, max_range_m=20.0, angle_offset_deg=90.0, angle_direction=-1.0),
 }

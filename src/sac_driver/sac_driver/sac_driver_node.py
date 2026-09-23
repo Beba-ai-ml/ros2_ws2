@@ -126,9 +126,10 @@ class SACDriverNode(Node):
              95.0, 100.0, 105.0, 110.0, 115.0, 120.0, 125.0, 130.0, 135.0, 150.0, 165.0, 180.0, 195.0],
         )
         lidar_max_range_m = float(self._param("lidar.max_range_m", 20.0))
-        lidar_angle_offset_deg = float(self._param("lidar.angle_offset_deg", -90.0))
-        # Current 450-ray simulator parity: sim angle a maps to ROS 90-a.
-        # Keep the fallback safe if a caller omits the parameter file.
+        # Current 450-ray simulator parity for this car: the physical lidar is
+        # mounted backwards, so sim angle a maps to raw scan angle -(a + 90).
+        # Keep the same physical convention if a caller omits the parameter file.
+        lidar_angle_offset_deg = float(self._param("lidar.angle_offset_deg", 90.0))
         lidar_angle_direction = float(self._param("lidar.angle_direction", -1.0))
         lidar_use_interpolation = bool(self._param("lidar.use_interpolation", True))
 

@@ -191,17 +191,19 @@ colcon build --packages-select sac_driver
 ## Car steers into obstacles instead of away / turns for no reason
 
 The lidar frame convention must match the simulator the policy was trained in:
-sim angle 90° = forward, sim 0° = the side the car turns to on a positive steer. In ROS that is
-`lidar.angle_offset_deg: -90.0`, `lidar.angle_direction: -1.0`, `control.steer_sign: 1.0`
-(derived from `racer_env.py`; the offline check is `src/sac_driver/test/test_sim_parity.py`).
+sim angle 90° = forward, sim 0° = the side the car turns to on a positive steer. This car's
+lidar is physically mounted backwards (180° around Z), so the active local settings are
+`lidar.angle_offset_deg: 90.0`, `lidar.angle_direction: -1.0`, `control.steer_sign: 1.0`,
+plus `base_link -> laser` static TF yaw `π` in `bringup_launch3.py` (derived from
+`racer_env.py`; the offline check is `src/sac_driver/test/test_sim_parity.py`).
 
 **Cardboard test, wheels off the ground — front alone is NOT enough** (a 90° rotated frame also
 "avoids" a frontal obstacle, that is how the wrong `offset 0` passed in March 2026):
 
 1. Raw frame: `python3 ros2_panel/scan_test.py`. Cardboard 0.5 m in FRONT of the lidar →
-   closest point at ≈ 0°; on the car's LEFT → ≈ +90°. If the front shows up at ±90° or 180°
-   the lidar is mounted rotated: shift `lidar.angle_offset_deg` by that amount and fix the
-   static `base_link -> laser` yaw in `bringup_launch3.py`.
+   closest point at ≈ ±180° because this sensor is mounted backwards; on the car's LEFT →
+   approximately -90°. The static `base_link -> laser` yaw must be π, and the AI offset must
+   stay +90° for this physical mount.
 2. Model frame: with the AI node running, cardboard in FRONT must give the minimum of the
    450-ray vector at index 180 (sim 90°), on the LEFT at index 0, on the RIGHT at index 360.
 3. Behaviour (hold RB): cardboard ahead-LEFT → wheels turn RIGHT

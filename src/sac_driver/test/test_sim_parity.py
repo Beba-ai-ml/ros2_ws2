@@ -48,7 +48,7 @@ def _load_params() -> dict:
 
 
 class _Scan:
-    """Minimal LaserScan stand-in: ROS convention, angle_min=-pi, CCW, 0 = forward."""
+    """Minimal raw LaserScan stand-in for the car's backwards-mounted lidar."""
 
     def __init__(self, n: int = 1440, obstacle_deg: float | None = None, dist: float = 0.5):
         self.angle_min = -math.pi
@@ -83,25 +83,25 @@ def _assert_min_at(tc: unittest.TestCase, out: np.ndarray, idx: int, msg: str) -
 
 
 class LidarFrameParity(unittest.TestCase):
-    """Sim angle 90 = forward; 0 = side of a positive steer (LEFT in ROS); 180 = right."""
+    """Sim angle 90 = forward; raw laser frame is rotated 180deg on the car."""
 
     def test_450_rays(self):
         self.assertEqual(len(build_lidar_angles(0.5, 2.0)), 450)
 
     def test_front_obstacle_lands_on_sim_forward_index(self):
-        out = _converter_from_params().convert(_Scan(obstacle_deg=0.0))
+        out = _converter_from_params().convert(_Scan(obstacle_deg=180.0))
         _assert_min_at(self, out, 180, "sim angle 90deg (index 180) must see the front")
 
     def test_left_obstacle_lands_on_sim_angle_0(self):
-        out = _converter_from_params().convert(_Scan(obstacle_deg=+90.0))
-        _assert_min_at(self, out, 0, "ROS +90deg (left) must be sim angle 0deg")
+        out = _converter_from_params().convert(_Scan(obstacle_deg=-90.0))
+        _assert_min_at(self, out, 0, "raw -90deg (car left after 180deg mount) must be sim angle 0deg")
 
     def test_right_obstacle_lands_on_sim_angle_180(self):
-        out = _converter_from_params().convert(_Scan(obstacle_deg=-90.0))
-        _assert_min_at(self, out, 360, "ROS -90deg (right) must be sim angle 180deg")
+        out = _converter_from_params().convert(_Scan(obstacle_deg=+90.0))
+        _assert_min_at(self, out, 360, "raw +90deg (car right after 180deg mount) must be sim angle 180deg")
 
     def test_rear_obstacle_lands_in_rear_hemisphere(self):
-        out = _converter_from_params().convert(_Scan(obstacle_deg=180.0))
+        out = _converter_from_params().convert(_Scan(obstacle_deg=0.0))
         idx = int(np.argmin(out))
         angles = build_lidar_angles(0.5, 2.0)
         self.assertAlmostEqual(angles[idx], 270.0, delta=2.0)
@@ -109,7 +109,7 @@ class LidarFrameParity(unittest.TestCase):
     def test_positive_steer_turns_left_in_ros(self):
         p = _load_params()
         self.assertGreater(p["control.steer_sign"], 0.0,
-                           "positive policy steer must turn LEFT (ROS +) to match sim angle 0 = left")
+                           "positive policy steer must keep the sim angle-0 side mapping")
 
 
 class ObservationLayoutParity(unittest.TestCase):

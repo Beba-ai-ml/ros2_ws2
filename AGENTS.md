@@ -25,9 +25,10 @@ working inside this repository.
     1.13 on Jetson. Do not restore `session_Rybnik_02_1.pth` or make
     `session_car_1_2_policy.pth` the default without an explicit decision.
 12. **Current lidar parity is authoritative:**
-    `lidar.angle_offset_deg: -90.0`, `lidar.angle_direction: -1.0`,
-    `control.steer_sign: 1.0`. The simulator has 90 degrees at the front; ROS has 0 degrees
-    at the front, so the mapping is `ROS = 90 - sim`. The offline guard is
+    this car's lidar is physically mounted backwards (180 degrees around Z), so the active
+    local settings are `lidar.angle_offset_deg: 90.0`, `lidar.angle_direction: -1.0`,
+    `control.steer_sign: 1.0`, and static TF `base_link -> laser` yaw `pi`. The simulator has
+    90 degrees at the front; raw laser 180 degrees is the car front. The offline guard is
     `src/sac_driver/test/test_sim_parity.py`; a physical left/right cardboard test is still
     required before driving.
 

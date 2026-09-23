@@ -24,9 +24,12 @@ sac_driver:
     lidar.max_range_m: 20.0
     # Simulator convention: 90deg = FORWARD, 0deg = the side the car turns to
     # on a POSITIVE steer action, 180deg = the other side.
-    # ROS LaserScan: 0 rad = forward, +90deg = LEFT, positive steering = LEFT.
-    # Hence sim angle a -> scan angle (90 - a) deg: direction -1, offset -90.
-    # (The old 0.0 / +1.0 pair fed the network a scan rotated by 90deg.)
+    # The physical S1 is mounted 180deg around Z relative to base_link:
+    # raw laser 0deg points to the car rear, raw +/-180deg points forward.
+    # Therefore the simulator angle a -> raw scan angle is -(a + 90deg):
+    # direction -1, offset +90. This keeps a=90deg (sim front) at raw 180deg,
+    # a=0deg on the car's left, and a=180deg on the car's right.
+    # (With an aligned sensor the equivalent offset would be -90deg.)
     # CALIBRATION: re-run the cardboard test (left AND right, not only front)
     # after any change here - see docs/TROUBLESHOOTING.md.
     lidar.angle_offset_deg: -90.0

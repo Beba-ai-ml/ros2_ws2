@@ -65,7 +65,7 @@ Extracts target angles from the full lidar scan with angle wrapping to [-pi, pi)
 | Element | Description |
 |---------|-------------|
 | `class LidarConverter` | Stateless converter, initialized with angle list and offset |
-| `__init__(angles_deg, offset_deg, max_range)` | Sets up target angles, frame offset (-90deg), max range (20m) |
+| `__init__(angles_deg, offset_deg, max_range)` | Sets up target angles, physical-mount-aware frame offset (+90deg), max range (20m) |
 | `convert(scan_msg)` | Returns array of normalized distances [0,1]. Uses interpolation between adjacent scan indices. |
 | `build_lidar_angles(front_step, rear_step)` | Generates variable-resolution angles: front hemisphere (0-180°) at front_step, rear (180-360°) at rear_step |
 
@@ -152,8 +152,8 @@ Builds the 1820-float state vector from sensor data.
 | `lidar.front_step_deg` | float | `0.5` | Front hemisphere angular step (0 = use angles_deg list) |
 | `lidar.rear_step_deg` | float | `2.0` | Rear hemisphere angular step (0 = use angles_deg list) |
 | `lidar.angles_deg` | float[] | 27 angles | Explicit target angles (overridden when front/rear step > 0) |
-| `lidar.angle_offset_deg` | float | `-90.0` | Simulator angle → ROS scan angle = `direction * (a + offset)`. The simulator has 90° = forward, so `-90` puts sim "forward" at ROS 0. |
-| `lidar.angle_direction` | float | `-1.0` | `-1` because sim 0° is the positive-steer side = ROS +90° (left). Pairs with `control.steer_sign`. |
+| `lidar.angle_offset_deg` | float | `90.0` | Simulator angle → raw scan angle = `direction * (a + offset)`. The lidar is mounted 180° backwards, so sim 90° = forward maps to raw ±180°. |
+| `lidar.angle_direction` | float | `-1.0` | `-1` preserves simulator ray order; with the 180° mount, sim 0° maps to raw -90° (car left). Pairs with `control.steer_sign`. |
 | `lidar.max_range_m` | float | `20.0` | Max lidar range for normalization |
 | `lidar.use_interpolation` | bool | `true` | Interpolate between scan indices |
 | `state.stack_frames` | int | `4` | Number of frames to stack (one per 60 Hz tick) |
@@ -200,7 +200,7 @@ Launches the full hardware stack:
 - VESC motor controller driver + odom conversion
 - Joystick driver + joy_mode_manager
 - Ackermann mux
-- Static transform publishers (base_link → laser, etc.)
+- Static transform publishers (base_link → laser, yaw π for the backwards-mounted lidar)
 
 ---
 
