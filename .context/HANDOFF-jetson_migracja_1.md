@@ -1,5 +1,9 @@
 # Handoff: jetson_migracja_1
 
+**Kontynuacja bezpośrednio na Jetsonie:** [RESEARCH-jetson-20260923.md](RESEARCH-jetson-20260923.md).
+Potwierdzono live -90/-1, model mpo2, TF yaw π oraz brak VESC/odometrii. Poniżej pozostaje
+historyczny kontekst z PC; aktualne wyniki i ograniczenia są w raporcie kontynuacji.
+
 Stan wiedzy: 2026-09-23. Ten plik jest przekazaniem kontekstu dla Codexa uruchomionego
 bezpośrednio na Jetsonie. Przeczytaj go przed dalszą diagnozą. Celem jest ustalić, co dokładnie
 widzi SAC na wejściu lidarowym i jak raw `/scan`, transform TF, SLAM oraz fizyczne kierunki auta

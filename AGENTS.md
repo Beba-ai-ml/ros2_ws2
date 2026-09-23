@@ -24,13 +24,15 @@ working inside this repository.
     values, stack 4 and action repeat 8. The file uses legacy torch serialization for torch
     1.13 on Jetson. Do not restore `session_Rybnik_02_1.pth` or make
     `session_car_1_2_policy.pth` the default without an explicit decision.
-12. **Current lidar parity is authoritative:**
-    this car's lidar is physically mounted backwards (180 degrees around Z), so the active
-    local settings are `lidar.angle_offset_deg: 90.0`, `lidar.angle_direction: -1.0`,
-    `control.steer_sign: 1.0`, and static TF `base_link -> laser` yaw `pi`. The simulator has
-    90 degrees at the front; raw laser 180 degrees is the car front. The offline guard is
-    `src/sac_driver/test/test_sim_parity.py`; a physical left/right cardboard test is still
-    required before driving.
+12. **Read `.context/RESEARCH-jetson-20260923.md` before lidar work.** Live parameters and
+    source YAML are `lidar.angle_offset_deg: -90.0`, `lidar.angle_direction: -1.0`, with
+    `control.steer_sign: 1.0` in YAML. Cardboard captures support raw front near 0 degrees and
+    left near +90 degrees. However, live static TF yaw is pi, Python offset fallbacks are
+    +90, and four offline lidar tests assume a backwards raw frame and fail. These are
+    unresolved inconsistencies, not proof of a physical 180-degree raw frame. Preserve
+    calibration until the measured frame and TF have been reconciled; do not restore +90
+    based on older documentation. The user explicitly prohibited enabling autonomy in
+    the 2026-09-23 research session. Continue with subscriptions and parameter reads only.
 
 ## Repo map — edit here / do not edit
 

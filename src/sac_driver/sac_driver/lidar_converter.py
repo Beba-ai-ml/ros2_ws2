@@ -24,9 +24,9 @@ def _get_attr(obj: object, name: str):
 class LidarConverter:
     target_angles_deg: Sequence[float]
     max_range_m: float
-    # Current 450-ray parity for this car: the physical lidar is mounted
-    # backwards, so sim angle a maps to the raw scan angle -(a + 90).
-    # Legacy 27-ray callers must pass their historical values explicitly.
+    # Preserved fallback for a backwards raw frame. The active YAML uses -90
+    # instead; see .context/RESEARCH-jetson-20260923.md. Callers should pass
+    # the measured mapping explicitly, including legacy 27-ray callers.
     angle_offset_deg: float = 90.0
     angle_direction: float = -1.0
     use_interpolation: bool = True

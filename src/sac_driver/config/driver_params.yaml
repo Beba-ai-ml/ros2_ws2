@@ -24,12 +24,12 @@ sac_driver:
     lidar.max_range_m: 20.0
     # Simulator convention: 90deg = FORWARD, 0deg = the side the car turns to
     # on a POSITIVE steer action, 180deg = the other side.
-    # The physical S1 is mounted 180deg around Z relative to base_link:
-    # raw laser 0deg points to the car rear, raw +/-180deg points forward.
-    # Therefore the simulator angle a -> raw scan angle is -(a + 90deg):
-    # direction -1, offset +90. This keeps a=90deg (sim front) at raw 180deg,
-    # a=0deg on the car's left, and a=180deg on the car's right.
-    # (With an aligned sensor the equivalent offset would be -90deg.)
+    # 2026-09-23: live parameters match this -90/-1 pair. Cardboard captures
+    # indicate raw front near 0deg, left near +90deg, right near -90deg.
+    # Thus sim angle a maps to raw scan angle 90-a. The housing orientation
+    # alone does not establish the published scan frame. Live TF still has
+    # yaw pi and Python fallbacks use +90; see the unresolved frame conflict
+    # in .context/RESEARCH-jetson-20260923.md before changing calibration.
     # CALIBRATION: re-run the cardboard test (left AND right, not only front)
     # after any change here - see docs/TROUBLESHOOTING.md.
     lidar.angle_offset_deg: -90.0

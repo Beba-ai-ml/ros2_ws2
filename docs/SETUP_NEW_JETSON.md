@@ -187,7 +187,7 @@ routine instead and export your own XML.
 |-----|-------------------|-------------------|
 | `speed_to_erpm_gain` | `1850.0` | Command a known speed, measure the real distance over time, scale the gain until `/odom` matches reality |
 | `speed_to_erpm_offset` | `0.0` | Leave at 0 unless the motor has a deadband |
-| `speed_min` / `speed_max` | `-45250.0` / `45250.0` | erpm clamp — keep at or below the motor's safe erpm |
+| `speed_min` / `speed_max` | `-3525.0` / `3525.0` | Current local erpm clamp; calibrate for your motor |
 | `steering_angle_to_servo_gain` | `-0.9` | servo units per radian; the sign follows the steering linkage |
 | `steering_angle_to_servo_offset` | `0.5304` | servo value with the wheels straight |
 | `servo_min` / `servo_max` | `0.05` / `0.95` | mechanical end stops — set these before touching the gain |
@@ -231,13 +231,13 @@ ros2 launch sac_driver sac_driver.launch.py
 ros2 service call /sac_driver/enable std_srvs/srv/SetBool "{data: true}"
 ```
 
-The wheels must steer **away** from the cardboard. If they steer into it, the lidar frame
-convention is wrong. This car's lidar is mounted 180° backwards; the current 450-ray models
-use `lidar.angle_offset_deg: 90.0`, `lidar.angle_direction: -1.0` and `control.steer_sign: 1.0`,
-with static TF `base_link -> laser` yaw π. Thus the simulator's 90° front ray maps to raw
-laser ±180°, and simulator angle increases in the opposite direction to the raw scan.
-The older 27-ray profile has its own explicit legacy values. Do not change the current values
-based on a front-only test; validate left and right cardboard positions as described below.
+The wheels must steer **away** from the cardboard. If they steer into it, investigate the
+scan frame and steering calibration. On 2026-09-23 the live 450-ray configuration is
+`lidar.angle_offset_deg: -90.0`, `lidar.angle_direction: -1.0`, with `control.steer_sign: 1.0`
+in YAML. Recorded cardboard positions support raw front 0°, left +90°, right -90°.
+The retained static TF yaw π and Python +90 fallbacks conflict with those measurements.
+Read [the research report](../.context/RESEARCH-jetson-20260923.md) before copying this
+calibration to another car. The 27-ray profile is legacy and incompatible with the current node.
 
 Check what the lidar actually sees with:
 
@@ -247,9 +247,10 @@ python3 ros2_panel/scan_test.py     # prints the 20 closest points of one /scan 
 
 ## 10. Lidar mounting
 
-The bringup publishes a static transform `base_link` → `laser` at `0.27 0.0 0.11` (x y z, no
-rotation) in `src/f1tenth_stack/launch/bringup_launch3.py`. Measure your own mounting position
-and update it — SLAM and localization depend on it.
+The bringup publishes `base_link` → `laser` at `0.27 0.0 0.11` (x y z) with yaw π in
+`src/f1tenth_stack/launch/bringup_launch3.py`. That yaw is under investigation on this car.
+Measure the published scan frame against the vehicle before setting TF on a new car;
+SLAM and localization depend on it.
 
 Lidar launch arguments (also in `bringup_launch3.py`, overridable on the command line):
 

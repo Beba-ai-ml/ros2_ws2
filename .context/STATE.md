@@ -1,15 +1,40 @@
 # SAC Driver - Current State
 
+## 2026-09-23 - direct Jetson audit and GitHub synchronization
+
+Read [RESEARCH-jetson-20260923.md](RESEARCH-jetson-20260923.md) first. The local changes were
+preserved in `8ca0698` and merged with the remote handoff `2df1fc0` on
+`fix/sim-parity-20260913`. No calibration values, running nodes or autonomy state were changed
+during this audit. The user explicitly prohibited enabling autonomy.
+
+- Live `/sac_driver` parameters are **offset -90, direction -1**, mpo2 policy, 60 Hz tick,
+  decision every 8 ticks. Source and installed driver YAML and Python modules match.
+- `/autonomy_lock=true`; sampled `/drive` commands are zero. VESC exited at 14:02 because
+  `/dev/vesc` was missing; USB enumeration has no expected VESC device. No `/sensors/core`
+  publisher or `/odom` messages in the 18-second audit. The AI process is alive but cannot
+  perform the normal inference path in this state.
+- `/scan`: 720 rays, about **10 Hz**, frame `laser`; saved cardboard captures and the user's
+  current left box support raw front 0°, left +90°, right -90°. Replay with -90/-1 places
+  these on the expected model sides; +90/-1 rotates them by 180°.
+- Live TF `base_link -> laser` is `(0.27, 0, 0.11)`, yaw **π**, inconsistent with the measured
+  raw directions. Python fallbacks are still +90. These values were preserved for review.
+- Existing offline guard: **11/15 pass, four lidar tests fail** because they assume the
+  opposite raw frame. Older statements that all parity tests pass are historical.
+- Default DDS discovery caused missing nodes and parameter timeouts. An isolated UDP-only
+  diagnostic profile with explicit loopback peers read the active parameters and TF without
+  restarting any existing process. Underlying DDS cause remains unproven.
+- Panel runs from `~/ros2_panel`, outside the repo, with equivalent bringup/AI/SLAM commands.
+  SLAM was not running. `key_drive.service` is **inactive and disabled**.
+
 ## ✅ 2026-09-22 - default policy switched to the validated mpo2 training run
 The current default is `weights/session_Sesja_mpo2_2_policy.pth`, a policy-only export of
 `/home/beba/occupancy_racer/Soft_Actor_Critic_2/runs/session_Sesja_mpo2_2/session_Sesja_mpo2_2.pth`.
 The source run used `mpo2`, 450-ray lidar, state 1820, stack 4 and action repeat 8; it logged
 7,131 episodes, peak mean_100 195 m and max single episode 256.6 m. The full training checkpoint
 stays on the PC; the repo contains the ~5 MB export that `policy_loader.py` can load on Jetson.
-The current lidar parity is authoritative for the physical car mount: the S1 is rotated 180°
-around Z, so `offset=+90`, `direction=-1`, `steer_sign=+1`, and static TF `base_link -> laser`
-yaw is π. The same +90 fallback is now used by the Python converter/node when no YAML is
-provided. Offline tests pass; the physical left/right cardboard test is still pending.
+The later direct audit above supersedes the earlier claim that +90 and TF yaw π were
+physically validated. The default model remains unchanged; scan/TF consistency and physical
+steering validation are still pending.
 
 ## 2026-09-23 - read-only ROS input diagnostic
 Added `tools/ros2_input_diagnostic.py`. It subscribes to `/scan`, `/odom`, `/drive`, and
@@ -22,10 +47,9 @@ on the car. `--capture` prompts for one cardboard position per Enter, waits for 
 the next capture is not a sweep already in progress, then appends raw ranges, converted AI rays,
 odometry, drive, and servo values to `log/*.jsonl`.
 
-Conversation and Jetson follow-up details are in `.context/HANDOFF-jetson_migracja_1.md`. The
-runtime values reported during the user's capture and later screenshot conflict (`+90/-1` versus
-`-90/-1`); the captured AI ray is a diagnostic-side conversion, not proof of the active network
-input. Re-query the running Jetson node before changing calibration or restarting AI.
+Conversation details are in `.context/HANDOFF-jetson_migracja_1.md`; the direct audit now
+confirms live -90/-1. Captured AI rays are diagnostic-side conversions, not a readout of the
+network's internal state. Re-query after future configuration changes.
 
 ## 🔴 2026-09-13 — sim↔car parity fix, NOT YET DRIVEN ON THE CAR
 Branch `fix/sim-parity-20260913`. Review with evidence: `.context/review-jazda-ai-20260913.md`.
@@ -49,8 +73,8 @@ old March cardboard verdict is not trustworthy (front-only test, garbled state c
 - **Active model `weights/session_Sesja_mpo2_2_policy.pth`** (mpo2, peak mean_100 195 m) —
   450-ray variable-resolution lidar, 1820-dim state, hidden [512,512,256]; alternatives
   `session_car_1_2_policy.pth` (R_01, 220 m) and `session_car_1_3_final_policy.pth`.
-- 450-angle lidar extraction with variable step (0.5° front, 2.0° rear), sim frame mapping
-  to the backwards-mounted raw scan (`raw = -(sim + 90°)`, `offset +90`, `direction -1`)
+- 450-angle lidar extraction with variable step (0.5° front, 2.0° rear); active YAML/live
+  mapping is `raw = 90° - sim` (`offset -90`, `direction -1`), with TF still under review
 - 4-frame stacking (1820-float state vector: 455 x 4 ticks at 60 Hz)
 - Observation per frame: [450 lidar, collision=0, speed_norm(/2.5), servo_norm(0..1), linear_accel, angular_vel]
 - Deadman switch via `/autonomy_lock` (hold RB to drive, release to stop); LB overrides
@@ -155,16 +179,16 @@ everything works.
 - **Two VESC drivers on one port** — a manual bringup plus `key_drive.service` produces silent,
   undefined behaviour. Check `pgrep -af vesc_driver_node` and
   `systemctl is-active key_drive.service` first.
-- **`key_drive.service` is enabled on this car** — the car drives from a plugged-in keyboard
-  right after boot, without a deadman button. Safety-relevant for anyone working on the hardware.
+- **`key_drive.service` is disabled and inactive on 2026-09-23.** If enabled later, keyboard
+  driving starts at boot without a deadman button; always re-check before hardware work.
 - **NFS mount disconnects** — `/home/laptop/shared` may not be mounted after a reboot. Not
   critical (weights are local). Fix: `sudo mount /home/laptop/shared`.
 - **Servo subscription removed (2026-09-13)** — steering feedback is the node's own last command,
   `_data_ready()` waits only for `/scan` and `/odom`.
 - **Safe mode is a no-op** — `safe_steer_scale = 1.0` and `safe_accel_scale = 1.0` apply no
   scaling. For cautious first runs set them below 1.0.
-- **Accel feedback channel interpretation** — channel [452] is assumed to be the previous NN raw
-  accel action. If the training env uses a different value, behaviour may be suboptimal.
+- **Steering feedback channel [452]** is `(previous steer + 1) / 2` after the 2026-09-13 fix;
+  older notes describing this channel as acceleration feedback are obsolete.
 - **`bringup_launch3.py` lidar `serial_port` defaults to `/dev/ttyUSB0`**, not the `/dev/rplidar`
   udev symlink — pass `serial_port:=/dev/rplidar` if the enumeration order is unstable.
 - **`sensors.yaml`** still holds the legacy Hokuyo/`urg_node` settings and is unused.
@@ -179,8 +203,8 @@ model.device: "cpu"
 model.weights_only: false
 lidar.front_step_deg: 0.5   # 450-ray variable resolution
 lidar.rear_step_deg: 2.0
-lidar.angle_offset_deg: 90.0   # physical lidar yaw π: raw ±180 deg = car front
-lidar.angle_direction: -1.0    # preserves simulator ray order; sim 0 deg = car left
+lidar.angle_offset_deg: -90.0  # confirmed live/YAML; sim front -> raw 0 deg
+lidar.angle_direction: -1.0    # sim 0 deg -> raw +90 deg (left in captures)
 lidar.max_range_m: 20.0
 state.stack_frames: 4
 state.max_speed_mps: 2.5    # training physics max_speed
@@ -202,6 +226,9 @@ safety.watchdog_timeout_sec: 0.5
 ```
 
 ## Next Steps
+0. Resolve missing VESC USB/power first, then reconcile the measured raw frame, retained TF
+   yaw π, Python fallbacks and offline test assumptions using the research report. Any
+   necessary restart must be coordinated with the user; autonomy remains prohibited here.
 1. **Wheels up: LEFT/RIGHT cardboard test** (docs/TROUBLESHOOTING.md) with the parity-fixed
    node, then first ground run at `speed_limit_mps 2.0` with `session_Sesja_mpo2_2_policy.pth`;
    compare with `session_car_1_2_policy.pth` only as the R_01 alternative.
@@ -220,9 +247,8 @@ safety.watchdog_timeout_sec: 0.5
 ### 2026-09-22
 - Default policy changed from `session_car_1_2_policy.pth` to the policy-only
   `session_Sesja_mpo2_2_policy.pth`, exported from the final `Sesja_mpo2_2` checkpoint.
-- `install.sh`, launch defaults, lidar diagnostic and current AI instructions now point to the
-  mpo2 policy. Lidar parity for the physical 180° mount is `offset=+90`, `direction=-1`,
-  `steer_sign=+1`, with static TF yaw π.
+- `install.sh`, launch defaults and lidar diagnostic now point to the mpo2 policy. Earlier
+  +90/TF π assumptions are superseded by the 2026-09-23 direct audit above.
 - **Panel SETUP no longer depends on the optional LED strip** — removed the missing `~/ros2_ws/ledy.py`/SPI setup from all panel variants and made `/dev/rplidar` and `/dev/vesc` permission changes conditional on those devices existing.
 
 ### 2026-09-13
@@ -270,4 +296,4 @@ safety.watchdog_timeout_sec: 0.5
 - **Flipped speed_sign and steer_sign to -1.0** — the car drove backwards and steered the wrong way.
 - **Fixed ros2_panel process_manager** — added `_kill_ros2_orphans()`.
 
-Last updated: 2026-09-08
+Last updated: 2026-09-23

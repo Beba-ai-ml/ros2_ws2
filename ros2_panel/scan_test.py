@@ -41,12 +41,9 @@ def main():
         print(f"Closest point: index {closest}, angle {closest_angle:.2f}°, dist {ranges[closest]:.3f} m")
         print(f"\nIf this object is DIRECTLY IN FRONT of the vehicle,")
         print(f"then FRONT = {closest_angle:.1f}° in the raw lidar frame.")
-        print(f"This car's lidar is mounted backwards: expected front ≈ ±180°;")
-        print(f"AI config uses angle_offset=+90° and static TF yaw=180°.")
-        if abs(abs(closest_angle) - 180.0) < 10:
-            print("=> Backwards lidar mount looks CORRECT (front ≈ ±180°)")
-        else:
-            print("=> This does not match the configured 180° mount; check physical orientation.")
+        print("Record front, left, right and rear positions separately.")
+        print("These are raw scan angles; this tool does not apply TF or read AI parameters.")
+        print("Compare the measurements with the active AI mapping and base_link -> laser TF.")
 
     sub = node.create_subscription(LaserScan, '/scan', cb, 10)
     print("Put an object DIRECTLY IN FRONT of the vehicle, close (~20cm).")

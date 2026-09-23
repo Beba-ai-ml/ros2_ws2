@@ -6,6 +6,11 @@ The SAC agent was trained in simulation with [occupancy-racer-sac2](https://gith
 
 This repository is self-contained: clone it on a fresh Jetson, run one installer, and the car drives.
 
+**2026-09-23 status:** the live AI uses lidar `-90/-1`, matching the captured cardboard
+directions. Static TF yaw π and Python +90 fallbacks remain inconsistent with those captures;
+four offline lidar tests fail. The running bringup has no VESC connection or odometry.
+See [the live research report](.context/RESEARCH-jetson-20260923.md) before calibration or driving.
+
 ---
 
 ## What's in the box
@@ -132,17 +137,17 @@ If your car drives forward on a positive speed, flip both to `+1.0`.
 
 **6. Cardboard steering test.** With the car on the stand and the SAC driver enabled, hold a
 large piece of cardboard close to **one** side of the lidar. The wheels must steer **away**
-from the obstacle. If they steer **into** it, the lidar frame convention is wrong — change
-`lidar.angle_offset_deg` (`+90.0` with `angle_direction: -1.0` because this lidar is mounted
-180° backwards) and/or `control.steer_sign` (`1.0` on this car). The bringup static TF must
-also use `base_link -> laser` yaw `π`. Re-test after every change.
+from the obstacle. If they steer **into** it, measure the raw scan directions and compare
+the AI mapping, TF and steering calibration before changing values. Live AI currently uses
+`lidar.angle_offset_deg: -90.0`, `angle_direction: -1.0`; `control.steer_sign` is `1.0` in YAML.
+The retained TF yaw π conflicts with the recorded raw frame. See the research report above.
 
 **7. Calibrate `src/f1tenth_stack/config/vesc.yaml`** for your motor and servo:
 
 | Key | Value here | Meaning |
 |-----|-----------|---------|
 | `speed_to_erpm_gain` | `1850.0` | erpm per m/s — depends on motor KV, gearing, wheel size |
-| `speed_min` / `speed_max` | `-45250.0` / `45250.0` | erpm clamp in the VESC driver |
+| `speed_min` / `speed_max` | `-3525.0` / `3525.0` | Current local erpm clamp, preserved during sync |
 | `steering_angle_to_servo_gain` | `-0.9` | servo units per radian; sign follows linkage |
 | `steering_angle_to_servo_offset` | `0.5304` | servo value for wheels straight |
 | `servo_min` / `servo_max` | `0.05` / `0.95` | mechanical servo limits |
@@ -199,7 +204,7 @@ still at the default `2.0`.
 | `joy_teleop` | `joy_teleop` (patched copy) | `/joy` → `/teleop` |
 | `joy_mode_manager` | `f1tenth_stack` | deadman gating, `/teleop_gated`, `/autonomy_lock` |
 | `ackermann_mux` | `ackermann_mux` | priority mux → `ackermann_cmd` |
-| `static_transform_publisher` | `tf2_ros` | `base_link` → `laser` (0.27, 0, 0.11, yaw π; lidar mounted backwards) |
+| `static_transform_publisher` | `tf2_ros` | `base_link` → `laser` (0.27, 0, 0.11, yaw π; frame conflict under investigation) |
 
 Notes:
 
@@ -239,8 +244,8 @@ the parts that can be checked offline (`python3 test/test_sim_parity.py` inside 
 
 1. **Lidar Converter** — extracts the same 450 angles the simulator casts (0.5° steps over
    0°-180°, 2.0° over the rear), maps simulator angles to the ROS scan frame
-   (sim 90° = forward, sim 0° = the side a positive steer turns to; for this backwards-mounted
-   lidar `angle_direction -1`, `angle_offset_deg +90`), normalizes distances to [0, 1] (max 20 m), interpolates.
+   (sim 90° = forward, sim 0° = the side a positive steer turns to; active YAML uses
+   `angle_direction -1`, `angle_offset_deg -90`), normalizes distances to [0, 1] (max 20 m), interpolates.
 
 2. **State Builder** — builds the 455-element observation exactly like `_build_observation`:
    - `[0-449]` — 450 lidar rays (distance / 20.0, clipped [0,1])
@@ -389,7 +394,7 @@ model.device: "cpu"
 model.weights_only: false
 lidar.front_step_deg: 0.5        # variable-resolution lidar (450 rays)
 lidar.rear_step_deg: 2.0
-lidar.angle_offset_deg: 90.0     # raw laser 180 deg = car front (physical mount yaw π)
+lidar.angle_offset_deg: -90.0    # live/YAML: sim front 90 deg -> raw 0 deg; TF unresolved
 lidar.angle_direction: -1.0      # preserves simulator ray order; sim 0 = car left
 lidar.max_range_m: 20.0
 state.stack_frames: 4
