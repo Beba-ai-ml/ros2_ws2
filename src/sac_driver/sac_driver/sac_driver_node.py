@@ -132,6 +132,7 @@ class SACDriverNode(Node):
         lidar_angle_offset_deg = float(self._param("lidar.angle_offset_deg", -90.0))
         lidar_angle_direction = float(self._param("lidar.angle_direction", -1.0))
         lidar_use_interpolation = bool(self._param("lidar.use_interpolation", True))
+        lidar_max_invalid_gap_deg = float(self._param("lidar.max_invalid_gap_deg", 1.5))
 
         lidar_front_step = float(self._param("lidar.front_step_deg", 0.0))
         lidar_rear_step = float(self._param("lidar.rear_step_deg", 0.0))
@@ -198,6 +199,7 @@ class SACDriverNode(Node):
             angle_offset_deg=lidar_angle_offset_deg,
             angle_direction=lidar_angle_direction,
             use_interpolation=lidar_use_interpolation,
+            max_invalid_gap_deg=lidar_max_invalid_gap_deg,
         )
         self.state_builder = StateBuilder(
             stack_frames=stack_frames,
@@ -354,6 +356,7 @@ class SACDriverNode(Node):
         # Time spent stopped must not become an acceleration/steering step on
         # resume, including stops deduplicated by _last_stop_sent.
         self._last_control_time = None
+        self._needs_reset = True
         if self._last_stop_sent:
             return
         msg = AckermannDriveStamped()

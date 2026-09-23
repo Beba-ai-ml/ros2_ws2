@@ -403,6 +403,7 @@ lidar.rear_step_deg: 2.0
 lidar.angle_offset_deg: -90.0    # YAML/fallback: sim front 90 deg -> raw 0 deg; TF yaw 0
 lidar.angle_direction: -1.0      # preserves simulator ray order; sim 0 = car left
 lidar.max_range_m: 20.0
+lidar.max_invalid_gap_deg: 1.5  # bounded missing-ray repair within the current scan
 state.stack_frames: 4
 state.max_speed_mps: 2.5         # training physics max_speed
 control.rate_hz: 60.0            # sim frame

@@ -33,8 +33,10 @@ working inside this repository.
     The user subsequently confirmed wheels off the ground again and authorized stand tests
     at a temporary **0.5 m/s** AI limit with the user's RB deadman. Forward motion, RB stop,
     and left-box -> right steering were confirmed. Initial right-box response was mixed;
-    AI was stopped; a passive probe reproduced scan-dependent steering changes, with
-    intermittent nearby lidar returns mapped to 20 m. No filtering is deployed yet.
+    A passive probe reproduced scan-dependent steering changes, with intermittent nearby
+    returns mapped to 20 m. The converter now preserves valid interpolation endpoints and
+    repairs bounded gaps up to `lidar.max_invalid_gap_deg=1.5` within the current scan.
+    Replay gives 150/150 correct initial directions per side; physical retest is in progress.
     Resume timing was fixed and
     `model.cpu_threads=1` reduced inference latency. This authorization covers stand testing,
     not driving on the ground. Keep the deadman/watchdog and read the latest

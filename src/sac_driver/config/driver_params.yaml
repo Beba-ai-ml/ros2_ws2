@@ -37,6 +37,9 @@ sac_driver:
     lidar.angle_offset_deg: -90.0
     lidar.angle_direction: -1.0
     lidar.use_interpolation: true
+    # Repair short missing runs between valid rays in the current scan only.
+    # Width = missing ray count * angular step; use the closer bounding return.
+    lidar.max_invalid_gap_deg: 1.5
 
     state.stack_frames: 4
     # Speed normalisation divisor = physics max_speed the policy was trained

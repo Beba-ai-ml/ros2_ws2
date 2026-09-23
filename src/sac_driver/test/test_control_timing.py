@@ -59,16 +59,33 @@ class ControlTiming(unittest.TestCase):
 
     def test_stop_clears_clock_before_resume(self):
         node = self.harness()
+        node._needs_reset = False
         SACDriverNode._publish_stop(node, Time(seconds=180), 'data_missing')
         self.assertIsNone(node._last_control_time)
+        self.assertTrue(node._needs_reset)
         self.assertEqual(node.cmd_pub.publish.call_args[0][0].drive.speed, 0.0)
 
     def test_deduplicated_stop_also_clears_clock(self):
         node = self.harness()
+        node._needs_reset = False
         node._last_stop_sent = True
         SACDriverNode._publish_stop(node, Time(seconds=180), 'disabled')
         self.assertIsNone(node._last_control_time)
+        self.assertTrue(node._needs_reset)
         node.cmd_pub.publish.assert_not_called()
+
+    def test_unusable_scan_publishes_zero_and_resets_episode(self):
+        node = self.harness()
+        node._needs_reset = False
+        node.converter.convert.side_effect = ValueError('no valid range measurements')
+        node._publish_stop = lambda now, reason: SACDriverNode._publish_stop(node, now, reason)
+        SACDriverNode._on_timer(node)
+        command = node.cmd_pub.publish.call_args[0][0].drive
+        self.assertEqual(command.speed, 0.0)
+        self.assertEqual(command.steering_angle, 0.0)
+        node.engine.get_action.assert_not_called()
+        self.assertIsNone(node._last_control_time)
+        self.assertTrue(node._needs_reset)
 
 
 if __name__ == '__main__':

@@ -4,13 +4,16 @@ Kontynuacja [HANDOFF-jetson_migracja_1.md](HANDOFF-jetson_migracja_1.md), wykona
 na Jetsonie. Pierwszy odczyt runtime zakończono około 14:44 czasu Europe/Warsaw;
 później przeprowadzono autoryzowane próby na podniesionych kołach. Jazdy po ziemi nie było.
 
-**Stan po 15:40:** VESC/odom działają, geometria lidar/TF jest skorygowana. Próby potwierdziły
+**Stan po 15:49:** VESC/odom działają, geometria lidar/TF jest skorygowana. Próby potwierdziły
 ruszanie do przodu, stop RB i skręt od lewego boxa. Naprawiono skok przy wznowieniu oraz
-opóźnienia inferencji przez ustawienie jednego wątku CPU; **22/22 testy**, build OK.
+opóźnienia inferencji przez ustawienie jednego wątku CPU.
 Zmienna reakcja na prawy box została odtworzona bez ruchu: zmieniające się skany, zwłaszcza
-zaniki mapowane na 20 m, zmieniają kierunek pierwszej decyzji modelu. Wygładzanie sprawdzono
-tylko offline. AI zatrzymane, Bringup i pasywne monitorowanie VESC działają. Samodzielna
-jazda po ziemi pozostaje niezweryfikowana. Szczegóły aktualizacji są na końcu; pierwotny
+zaniki mapowane na 20 m, zmieniają kierunek pierwszej decyzji modelu. Wdrożono poprawną
+obsługę niepoprawnych sąsiadów interpolacji i uzupełnianie krótkich luk w pojedynczym skanie:
+replay **150/150 od boxa dla każdej strony**, **37/37 testów**, build OK. AI uruchomiono
+ponownie do próby na podniesionych kołach z limitem 0.5; wynik fizyczny jest oczekiwany.
+Bringup i pasywne monitorowanie VESC działają. Samodzielna jazda po ziemi pozostaje
+niezweryfikowana. Szczegóły aktualizacji są na końcu; pierwotny
 audyt poniżej opisuje stan około 14:44 i wcześniejsze usterki.
 
 ## Wynik
@@ -486,3 +489,53 @@ Zamknięto szczegółowy recorder prób; zapisane pliki `*_latest.json` są odt�
 Git zawiera poprawki czasu wznowienia, liczby wątków CPU, testy i dokumentację; dane surowe
 pozostają w ignorowanym `log/`. Domyślne limity YAML to nadal 2.0 m/s — 0.5 m/s obowiązywało
 wyłącznie w tymczasowej konfiguracji prób. Główna gałąź nie jest scalana automatycznie.
+
+## Naprawa brakujących promieni bez historii skanów, 15:49
+
+Na prośbę o kolejny krok zebrano dwie świeże serie po **150 pełnych raw skanów**.
+Wojtek osobno potwierdził nieruchomy box po prawej i po lewej; AI było wyłączone.
+Zapisy: `log/raw_scan_series_right_20260923.json` i `log/raw_scan_series_left_20260923.json`.
+W starszych dwóch pełnych skanach większość braków była pojedynczymi promieniami;
+driver SLLIDAR koduje zerowy odczyt jako `inf`. W konwerterze interpolacja
+`finite + inf`, a nawet `0 * inf` przy dokładnym indeksie, niszczyła poprawny zwrot.
+
+Porównano te same wejścia i model przy zerowych danych ruchu, resetując stack dla każdego
+skanu. Liczba pierwszych decyzji **od boxa**:
+
+| Wariant | Box po prawej: skręt w lewo | Box po lewej: skręt w prawo |
+|---|---:|---:|
+| poprzedni kod | 74/150 | 132/150 |
+| zachowanie poprawnego końca interpolacji | 150/150 | 149/150 |
+| dodatkowo krótkie ograniczone luki do 1.5° | 150/150 | 150/150 |
+
+Zaimplementowano ostatni wariant:
+
+1. Przed interpolacją odrzucane są `NaN`, `inf`, wartości <=0 oraz poza `range_min/max`
+   czujnika. Przy jednym poprawnym sąsiedzie używany jest ten poprawny pomiar.
+2. `lidar.max_invalid_gap_deg: 1.5` ogranicza szerokość uzupełnianej luki, liczoną jako
+   liczba brakujących promieni razy krok kątowy. Luka musi mieć poprawne pomiary po obu
+   stronach; używana jest bliższa z tych odległości. Wartość 0 wyłącza ten etap.
+3. Wszystko dotyczy **jednego bieżącego skanu**. Nie ma mediany czasowej, pamięci poprzedniej
+   sceny ani oczekiwania na kilka skanów. Długie i nieograniczone luki pozostają nieuzupełnione;
+   gdy oba końce interpolacji są niedostępne, nadal obowiązuje fallback max range.
+4. Całkowicie pusty/niepoprawny skan zgłasza błąd, który callback sterowania zamienia na
+   komendę stop. Stop resetuje teraz także stan epizodu, żeby powrót danych nie kontynuował
+   integratora i historii obserwacji sprzed błędu.
+
+**37/37 testów OK**: wcześniejsze testy oraz przypadki błędnych sąsiadów, zerowej wagi,
+krótkich/długich i nieograniczonych luk, nagłego pojawienia/zniknięcia przeszkody,
+pustych skanów i komendy zerowej przy wyjątku konwertera. Testy callbacka korzystają
+z atrap i nie tworzą węzła/publishera ROS. Build `sac_driver` poprawny.
+
+Osobno odtworzono pełne 300 skanów przez faktyczną implementację: tablice wejścia zgadzają
+się z kandydatem bitowo (maksymalna różnica **0**). Akcje lewego boxa **-0.874…-0.571**,
+prawego **+0.890…+0.961**. Wyniki w `log/lidar_implemented_replay_20260923.json`; porównanie
+wariantów w `log/lidar_candidate_comparison_20260923.json`. To wynik dla zarejestrowanych
+scen, nie gwarancja zachowania na dowolnym torze.
+
+Na istniejącej zgodzie na próby z podniesionymi kołami uruchomiono poprawione AI (PID 90859)
+z tymczasowym limitem **0.5/0.5 m/s**, cpu_threads **1**, gap **1.5**, safe mode true,
+watchdog **0.5 s**. Wszystkie wartości potwierdzono przez GetParameters. Bringup i jedyny
+VESC driver nie były restartowane. Recorder zapisuje
+`log/stand_trial_20260923_154832.jsonl`, inferencję `log/stand_lidar_fix_inference_20260923.jsonl`.
+Poproszono o dwie krótkie próby RB przy lewym boxie; fizyczny wynik jest jeszcze oczekiwany.

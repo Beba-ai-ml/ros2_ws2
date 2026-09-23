@@ -1,5 +1,31 @@
 # SAC Driver - Current State
 
+## 2026-09-23 15:49 - lidar missing-return repair built, stand retest in progress
+
+Collected 150 full raw scans per side with the user's confirmed box positions and AI off:
+`log/raw_scan_series_{left,right}_20260923.json`. Original reset-state decisions away
+from the box: right-box 74/150, left-box 132/150. Preserving the valid interpolation
+endpoint improved these to 150/150 and 149/150. Filling only short bounded invalid runs
+up to 1.5 degrees as well gave **150/150 for both sides** on these recordings.
+
+Implemented in `LidarConverter`: reject invalid/out-of-sensor-range samples before
+interpolation; retain one valid endpoint; repair bounded gaps from the closer bounding
+return using `lidar.max_invalid_gap_deg=1.5` (0 disables gap fill). No temporal history
+or cross-scan smoothing. Empty/all-invalid input raises, and the driver publishes stop;
+all stop paths now reset episode state as well as the control clock for fresh recovery.
+Long/unbounded gaps are not filled; two unavailable endpoints retain max-range fallback.
+
+**37 tests passed**, build `sac_driver` succeeded. Exact implemented replay matches the
+candidate arrays (maximum absolute difference 0) and gives 150/150 correct initial
+directions per side. This is a stationary-scene result, not validation of ground driving.
+
+Stand AI restarted from the diagnostic terminal, PID **90859**, with temporary 0.5/0.5
+limits; GetParameters confirmed those limits, cpu_threads=1, gap=1.5, safe mode true and
+watchdog 0.5 s. Single VESC driver 67703 and Bringup 67623 remain unchanged. Passive
+recorder PID 90484 writes `log/stand_trial_20260923_154832.jsonl`; inference trace is
+`log/stand_lidar_fix_inference_20260923.jsonl`. Asked for two short RB pulses with the
+left-front box first. Physical retest is pending; do not duplicate launches from the panel.
+
 ## 2026-09-23 15:40 - stationary probe isolates scan-driven steering instability
 
 With the user confirming a stationary right-front box and stepping away, collected 150

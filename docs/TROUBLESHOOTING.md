@@ -216,7 +216,19 @@ requires validation. See [the research report](../.context/RESEARCH-jetson-20260
    `steering_angle_to_servo_gain`, re-center the offset, re-test. Do NOT just flip
    `control.steer_sign` - that would leave the yaw feedback channel mirrored.
 
+### Missing lidar returns can also flip steering
+
+The 2026-09-23 stand test found isolated missing raw rays turning nearby obstacles into
+20 m model inputs: interpolation with `inf` erased the valid neighbor. The converter
+now discards invalid samples first, retains a valid endpoint, and fills only bounded
+gaps up to `lidar.max_invalid_gap_deg=1.5` using the closer edge in the current scan.
+There is no temporal smoothing. Empty/all-invalid scans cause a stop; longer gaps with
+two unavailable endpoints still use max range. Check scan quality before changing signs.
+Replay of 150 raw scans per box side gave 150/150 initial actions away from the box;
+physical validation and current runtime status are in `.context/STATE.md`.
+
 ## Car drives backwards
+
 
 `control.speed_sign` in `driver_params.yaml` and `SPEED_SIGN` in `scripts/key_drive.py` must
 both match the car's wiring. On this car positive `AckermannDrive.speed` = reverse, so both are

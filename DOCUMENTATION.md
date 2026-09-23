@@ -65,13 +65,19 @@ Extracts target angles from the full lidar scan with angle wrapping to [-pi, pi)
 | Element | Description |
 |---------|-------------|
 | `class LidarConverter` | Stateless converter, initialized with angle list and offset |
-| `__init__(angles_deg, offset_deg, max_range)` | Sets up target angles and max range (20m). YAML and Python fallback both use offset -90deg, matching the measured raw frame. |
-| `convert(scan_msg)` | Returns array of normalized distances [0,1]. Uses interpolation between adjacent scan indices. |
+| `__init__(target_angles_deg, max_range_m, ..., max_invalid_gap_deg=1.5)` | Sets up angles, range and bounded missing-ray repair. YAML and Python fallback both use offset -90deg, matching the measured raw frame. |
+| `convert(scan_msg)` | Returns normalized [0,1] distances. Rejects nonfinite, nonpositive and out-of-sensor-range samples before interpolation. A single valid interpolation endpoint is preserved. Empty/all-invalid scans raise ValueError, causing the driver to stop. |
 | `build_lidar_angles(front_step, rear_step)` | Generates variable-resolution angles: front hemisphere (0-180°) at front_step, rear (180-360°) at rear_step |
 
 **Current config: 450 rays** via `build_lidar_angles(0.5, 2.0)`:
 - Front hemisphere (0-180°): 361 rays at 0.5° step
 - Rear hemisphere (182-358°): 89 rays at 2.0° step
+
+Missing runs bounded by valid rays are filled from the closer bounding return when
+`missing_count * angle_increment` is at most `lidar.max_invalid_gap_deg`. This uses
+only the current scan and leaves valid samples unchanged. Longer/unbounded runs are
+not filled; two unavailable interpolation endpoints retain the max-range fallback.
+There is no temporal median or previous-scan cache.
 
 ---
 
@@ -156,7 +162,8 @@ Builds the 1820-float state vector from sensor data.
 | `lidar.angle_offset_deg` | float | `-90.0` | Raw angle = `direction * (a + offset)`: sim front 90° maps to raw 0°. YAML and Python fallback agree; see `.context/RESEARCH-jetson-20260923.md`. |
 | `lidar.angle_direction` | float | `-1.0` | With active offset -90, sim 0° maps to raw +90° (left in the cardboard captures). |
 | `lidar.max_range_m` | float | `20.0` | Max lidar range for normalization |
-| `lidar.use_interpolation` | bool | `true` | Interpolate between scan indices |
+| `lidar.use_interpolation` | bool | `true` | Interpolate valid endpoints; use the available endpoint when only one is valid |
+| `lidar.max_invalid_gap_deg` | float | `1.5` | Fill bounded missing runs up to this angular width from the closer edge in the same scan; 0 disables this gap fill. No temporal history. |
 | `state.stack_frames` | int | `4` | Number of frames to stack (one per 60 Hz tick) |
 | `state.max_speed_mps` | float | `2.5` | Speed normalization divisor = training physics `max_speed` |
 | `state.max_accel_mps2` | float | `4.0` | Acceleration normalization divisor |

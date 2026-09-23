@@ -142,6 +142,9 @@ it to land in the share dir.
 - **`sac_driver_node.py`** — Main ROS2 node. Subscribes to /scan, /odom, /autonomy_lock. Runs a 60 Hz tick loop with the policy every 8th tick. Computes linear_accel from odom speed delta. Builds state, runs inference, publishes /drive. Resolves `model.path`. Has debug logging for data readiness and autonomy state transitions.
 - **`state_builder.py`** — Builds 455-element observation frames (450 lidar + 5 state channels), maintains 4-frame sliding deque. Normalizes all inputs. Returns concatenated 1820-float state vector.
 - **`lidar_converter.py`** — Extracts 450 angles from LaserScan using `build_lidar_angles()` with variable step (0.5° front, 2.0° rear). Applies `lidar.angle_offset_deg` with wrapping to [-pi, pi). Returns normalized [0,1] distances.
+  Invalid samples are rejected before interpolation; one valid endpoint is retained.
+  `max_invalid_gap_deg=1.5` fills only short bounded gaps in the same scan from the closer
+  edge. No history is used; empty/all-invalid scans raise and cause the driver to stop.
 - **`inference_engine.py`** — Wraps GaussianPolicy. Takes 1820-float state, returns (steer, accel).
   `model.cpu_threads=1` bounds the PyTorch intra-op pool. On 2026-09-23 the same captured
   state gave median 4.2 ms with one thread versus 53.4 ms with six. Generic dimensions.

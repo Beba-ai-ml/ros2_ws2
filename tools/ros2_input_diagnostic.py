@@ -121,6 +121,7 @@ class InputDiagnostic(Node):
             angle_offset_deg=self.angle_offset_deg,
             angle_direction=self.angle_direction,
             use_interpolation=bool(params.get("lidar.use_interpolation", True)),
+            max_invalid_gap_deg=float(params.get("lidar.max_invalid_gap_deg", 1.5)),
         )
 
         self.scan: Optional[LaserScan] = None
@@ -287,6 +288,7 @@ class InputDiagnostic(Node):
                 "angle_offset_deg": self.angle_offset_deg,
                 "angle_direction": self.angle_direction,
                 "max_range_m": self.max_range_m,
+                "max_invalid_gap_deg": self.converter.max_invalid_gap_deg,
                 "target_ray_count": len(self.converter.target_angles_deg),
             },
             "scan": {

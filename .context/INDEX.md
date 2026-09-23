@@ -5,7 +5,7 @@ Autonomous racing vehicle inference node — runs a trained SAC (Soft Actor-Crit
 ## Context Files
 - `RESEARCH-jetson-20260923.md` — **read first**: direct live audit, VESC recovery,
   fresh cardboard captures, corrected TF yaw 0 and -90/-1 fallbacks, DDS trial workaround,
-  RB stand tests, resume timing correction and CPU-thread measurements
+  RB stand tests, resume timing correction, CPU-thread measurements and missing-ray repair
 - `KNOWLEDGE.md` — Architecture, key files, stack, conventions, how to run, debugging lessons
 - `STATE.md` — Current state, recent changes, decisions, known issues, gotchas
 - `HANDOFF-20260913-sim-parity.md` — historical context: what the 2026-09-13 sim↔car parity fix changed, the

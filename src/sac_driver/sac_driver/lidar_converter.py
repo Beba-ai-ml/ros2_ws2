@@ -20,6 +20,12 @@ def _get_attr(obj: object, name: str):
     raise AttributeError(f"scan_msg missing required field: {name}")
 
 
+def _get_optional_attr(obj: object, name: str, default):
+    if isinstance(obj, dict):
+        return obj.get(name, default)
+    return getattr(obj, name, default)
+
+
 @dataclass
 class LidarConverter:
     target_angles_deg: Sequence[float]
@@ -30,6 +36,11 @@ class LidarConverter:
     angle_offset_deg: float = -90.0
     angle_direction: float = -1.0
     use_interpolation: bool = True
+    max_invalid_gap_deg: float = 1.5
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.max_invalid_gap_deg) or self.max_invalid_gap_deg < 0.0:
+            raise ValueError("max_invalid_gap_deg must be finite and nonnegative.")
 
     def _to_scan_angle_rad(self, target_angle_deg: float) -> float:
         # Convert target angle into scan frame with optional offset and direction,
@@ -46,10 +57,35 @@ class LidarConverter:
         ranges_np = np.asarray(ranges, dtype=np.float32)
 
         if ranges_np.size == 0:
-            _LOGGER.warning("LaserScan ranges is empty; returning max-range vector.")
-            return np.ones(len(self.target_angles_deg), dtype=np.float32)
-        if angle_increment <= 0:
-            raise ValueError("LaserScan angle_increment must be > 0.")
+            raise ValueError("LaserScan ranges is empty.")
+        if not math.isfinite(angle_increment) or angle_increment <= 0:
+            raise ValueError("LaserScan angle_increment must be finite and > 0.")
+
+        # Discard invalid source samples before interpolation. In particular,
+        # finite + inf (and even 0 * inf at an exact ray) used to erase a nearby
+        # obstacle by producing inf/NaN and then replacing it with max range.
+        range_min = float(_get_optional_attr(scan_msg, "range_min", 0.0))
+        range_max = float(_get_optional_attr(scan_msg, "range_max", math.inf))
+        valid = (
+            np.isfinite(ranges_np) & (ranges_np > 0.0)
+            & (ranges_np >= range_min) & (ranges_np <= range_max)
+        )
+        if not np.any(valid):
+            # The control callback catches this error and publishes a stop.
+            raise ValueError("LaserScan contains no valid range measurements.")
+
+        if self.max_invalid_gap_deg > 0.0:
+            # Fill only short runs bounded by valid samples in THIS scan.
+            # The closer edge is conservative at an obstacle boundary. Longer
+            # gaps and unbounded scan edges remain unknown; no history is used.
+            ranges_np = ranges_np.copy()
+            valid_indices = np.flatnonzero(valid)
+            step_deg = math.degrees(angle_increment)
+            for left, right in zip(valid_indices[:-1], valid_indices[1:]):
+                missing = right - left - 1
+                if missing > 0 and missing * step_deg <= self.max_invalid_gap_deg:
+                    ranges_np[left + 1:right] = min(ranges_np[left], ranges_np[right])
+                    valid[left + 1:right] = True
 
         max_range = float(self.max_range_m)
         out = np.empty(len(self.target_angles_deg), dtype=np.float32)
@@ -71,10 +107,17 @@ class LidarConverter:
                     w = idx_float - idx0
                     v0 = float(ranges_np[idx0])
                     v1 = float(ranges_np[idx1])
-                    dist = (1.0 - w) * v0 + w * v1
+                    if valid[idx0] and valid[idx1]:
+                        dist = (1.0 - w) * v0 + w * v1
+                    elif valid[idx0]:
+                        dist = v0
+                    elif valid[idx1]:
+                        dist = v1
+                    else:
+                        dist = max_range
                 else:
                     idx = int(round(idx_float))
-                    dist = float(ranges_np[idx])
+                    dist = float(ranges_np[idx]) if valid[idx] else max_range
 
                 if not math.isfinite(dist) or dist <= 0.0:
                     dist = max_range
