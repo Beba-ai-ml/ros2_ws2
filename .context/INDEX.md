@@ -7,6 +7,8 @@ Autonomous racing vehicle inference node — runs a trained SAC (Soft Actor-Crit
 - `STATE.md` — Current state, recent changes, decisions, known issues, gotchas
 - `HANDOFF-20260913-sim-parity.md` — **read first**: what the 2026-09-13 sim↔car parity fix changed, the
   physical test checklist (H1-H5) still pending, decisions taken
+- `HANDOFF-jetson_migracja_1.md` — 2026-09-23 live Jetson handoff: raw `/scan` cardboard captures,
+  current runtime/config disagreement, active panel SLAM route, and safe next diagnostic steps
 - `review-jazda-ai-20260913.md` — the review with evidence (file:line in sim and car) behind that fix
 
 ## Workspace Structure

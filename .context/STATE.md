@@ -11,6 +11,22 @@ around Z, so `offset=+90`, `direction=-1`, `steer_sign=+1`, and static TF `base_
 yaw is π. The same +90 fallback is now used by the Python converter/node when no YAML is
 provided. Offline tests pass; the physical left/right cardboard test is still pending.
 
+## 2026-09-23 - read-only ROS input diagnostic
+Added `tools/ros2_input_diagnostic.py`. It subscribes to `/scan`, `/odom`, `/drive`, and
+`/commands/servo/position`; reports raw nearest scan angle, the nearest ray after the AI converter,
+message ages/rate, odometry signs, drive command, and servo value. It only reads topics and uses
+the checked-in `driver_params.yaml` for the AI-ray estimate by default; `--angle-offset` and
+`--angle-direction` can override it with live values from `ros2 param get`. Side labels assume
+`laser` yaw is 0 relative to `base_link`; the physical scan orientation still needs to be checked
+on the car. `--capture` prompts for one cardboard position per Enter, waits for two fresh scans so
+the next capture is not a sweep already in progress, then appends raw ranges, converted AI rays,
+odometry, drive, and servo values to `log/*.jsonl`.
+
+Conversation and Jetson follow-up details are in `.context/HANDOFF-jetson_migracja_1.md`. The
+runtime values reported during the user's capture and later screenshot conflict (`+90/-1` versus
+`-90/-1`); the captured AI ray is a diagnostic-side conversion, not proof of the active network
+input. Re-query the running Jetson node before changing calibration or restarting AI.
+
 ## 🔴 2026-09-13 — sim↔car parity fix, NOT YET DRIVEN ON THE CAR
 Branch `fix/sim-parity-20260913`. Review with evidence: `.context/review-jazda-ai-20260913.md`.
 Fixed four hard mismatches between the node and the training simulator (all four were enough on
