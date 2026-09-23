@@ -29,7 +29,9 @@ See [the live research report](.context/RESEARCH-jetson-20260923.md) before cali
 | Shutdown button | Optional GPIO button, BOARD pins 37 (drive) / 38 (sense) — not installed on this car |
 | Chassis | F1TENTH 1/10 scale RC car, wheelbase 0.35 m |
 
-CUDA 11.4 is present on the Jetson, but **inference runs on the CPU** (torch 1.13.1 CPU wheel). The policy needs ~5-6 ms per decision, well inside the 16 ms budget of the 60 Hz tick.
+CUDA 11.4 is present on the Jetson, but **inference runs on the CPU** (torch 1.13.1 CPU wheel).
+`model.cpu_threads: 1` limits the PyTorch pool. The 2026-09-23 stand benchmark measured a
+4.2 ms median per decision with one thread versus 53.4 ms with six; timing still varies.
 
 ### Software
 
@@ -286,7 +288,7 @@ the parts that can be checked offline (`python3 test/test_sim_parity.py` inside 
 | State dim | 1820 (455 features x 4 stacked frames) |
 | Action dim | 2 (steering [-1,1], acceleration [0,2]) |
 | Lidar | 450 rays, variable resolution (0.5° front, 2.0° rear) |
-| Framework | PyTorch 1.13.1, CPU inference, ~5-6 ms/step |
+| Framework | PyTorch 1.13.1, CPU inference, one intra-op thread by default |
 | Control rate | 60 Hz tick, policy every 8th tick (7.5 Hz, like the simulator) |
 | Active weights | `src/sac_driver/weights/session_Sesja_mpo2_2_policy.pth` (mpo2, peak mean_100 195 m, policy only) |
 | Alternative weights | `src/sac_driver/weights/session_car_1_2_policy.pth` (R_01, peak mean_100 220 m) |
@@ -395,6 +397,7 @@ first time).
 model.path: "weights/session_Sesja_mpo2_2_policy.pth"  # relative to the package share dir
 model.device: "cpu"
 model.weights_only: false
+model.cpu_threads: 1            # bounded PyTorch intra-op pool on the Jetson
 lidar.front_step_deg: 0.5        # variable-resolution lidar (450 rays)
 lidar.rear_step_deg: 2.0
 lidar.angle_offset_deg: -90.0    # YAML/fallback: sim front 90 deg -> raw 0 deg; TF yaw 0

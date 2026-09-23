@@ -14,9 +14,14 @@ The default policy is the policy-only export from
 `angle_offset_deg=-90`, `angle_direction=-1`; cardboard data supports front raw 0° and
 left raw +90°. Fresh user-confirmed front/left/right captures established the frame;
 TF yaw is now 0 and Python fallbacks match YAML -90. All 16 offline parity tests pass.
-Read `.context/RESEARCH-jetson-20260923.md`. The user prohibited enabling autonomy during
-this session, but confirmed wheels off the ground and authorized Bringup. Leave AI off.
-Physical steering response and driving remain untested.
+Read `.context/RESEARCH-jetson-20260923.md` and the latest `.context/STATE.md`. After the
+earlier Bringup-only stage, the user confirmed raised wheels again and authorized stand
+tests. The current trial uses a temporary 0.5 m/s AI limit and the user's RB deadman.
+Stand trials confirmed forward wheel motion, RB stop and right steering away from a
+left-front box. Initial response to a right-front box was inconsistent; AI is now stopped
+after a passive probe reproduced steering variation from changing scans/max-range
+dropouts. No filter is deployed yet. Resume timing was fixed and `model.cpu_threads=1`
+reduced latency. Ground driving is not authorized; read current state before starting nodes.
 
 ## Key commands
 

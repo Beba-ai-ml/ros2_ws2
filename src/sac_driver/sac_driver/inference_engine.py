@@ -22,9 +22,15 @@ class InferenceEngine:
         device: str | torch.device | None = "cpu",
         *,
         weights_only: bool = False,
+        cpu_threads: int = 1,
         action_scale: Optional[np.ndarray] = None,
         action_bias: Optional[np.ndarray] = None,
     ) -> None:
+        if int(cpu_threads) < 1:
+            raise ValueError("cpu_threads must be positive")
+        # Small batch-one policies contend with ROS on the Jetson when PyTorch
+        # uses every CPU. Bound this process's intra-op pool before inference.
+        torch.set_num_threads(int(cpu_threads))
         self.policy: GaussianPolicy = load_policy(
             policy_path,
             device=device,

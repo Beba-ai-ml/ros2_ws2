@@ -15,6 +15,8 @@ sac_driver:
     model.path: "weights/session_Sesja_mpo2_2_policy.pth"
     model.device: "cpu"
     model.weights_only: false
+    # Jetson stand benchmark: one intra-op thread avoids six-thread contention.
+    model.cpu_threads: 1
 
     # 450-ray variable-resolution lidar (front 0.5deg, rear 2.0deg), same
     # generator as the simulator: index 0 = angle 0deg, index 180 = 90deg,

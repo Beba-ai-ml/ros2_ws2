@@ -1,14 +1,17 @@
 # Jetson: kontynuacja researchu migracji, 2026-09-23
 
 Kontynuacja [HANDOFF-jetson_migracja_1.md](HANDOFF-jetson_migracja_1.md), wykonana bezpośrednio
-na Jetsonie. Odczyt runtime zakończony około 14:44 czasu Europe/Warsaw. To raport z
-działających procesów, kodu i istniejących pomiarów; próby jazdy nie wykonano.
+na Jetsonie. Pierwszy odczyt runtime zakończono około 14:44 czasu Europe/Warsaw;
+później przeprowadzono autoryzowane próby na podniesionych kołach. Jazdy po ziemi nie było.
 
-**Stan końcowy po 15:13:** VESC i odometria działają, a nowe pomiary przód/lewo/prawo
-potwierdziły korektę TF do yaw 0 i fallbacków Python do -90, zgodnie z YAML. Testy 16/16,
-build obu pakietów poprawny; nowy TF zweryfikowano live. Działa sam Bringup na zgodę
-Wojtka z kołami w powietrzu. AI i autonomia pozostają wyłączone. Szczegóły są w sekcjach
-aktualizacji na końcu. Pierwotny audyt poniżej opisuje stan około 14:44 i wcześniejsze usterki.
+**Stan po 15:40:** VESC/odom działają, geometria lidar/TF jest skorygowana. Próby potwierdziły
+ruszanie do przodu, stop RB i skręt od lewego boxa. Naprawiono skok przy wznowieniu oraz
+opóźnienia inferencji przez ustawienie jednego wątku CPU; **22/22 testy**, build OK.
+Zmienna reakcja na prawy box została odtworzona bez ruchu: zmieniające się skany, zwłaszcza
+zaniki mapowane na 20 m, zmieniają kierunek pierwszej decyzji modelu. Wygładzanie sprawdzono
+tylko offline. AI zatrzymane, Bringup i pasywne monitorowanie VESC działają. Samodzielna
+jazda po ziemi pozostaje niezweryfikowana. Szczegóły aktualizacji są na końcu; pierwotny
+audyt poniżej opisuje stan około 14:44 i wcześniejsze usterki.
 
 ## Wynik
 
@@ -323,3 +326,163 @@ i tematów ROS nie otwiera portu szeregowego i nie publikuje komend sterujących
 Zamknięte: zgodność zmierzonej geometrii raw skanu, TF i fallbacków z aktywnym YAML.
 Otwarte: fizyczna reakcja skrętu, jazda po ziemi, pomiar pełnego opóźnienia i jakość mapy
 SLAM. Pomiary pasywne i testy offline nie zastępują tych prób. Autonomia nadal zabroniona.
+
+## Przygotowanie próby na podniesionych kołach, 15:26
+
+Wojtek ponownie potwierdził podniesione koła i zgodził się na testowanie. Wybrano wariant,
+w którym sam przytrzymuje i puszcza RB, a diagnostyka rejestruje sygnały. Ta nowa zgoda
+rozszerza wcześniejsze ograniczenie do samego Bringupu na próbę stanowiskową.
+
+Pierwszy start AI z głównym YAML i argumentami `-p control.speed_limit_mps:=0.5` oraz
+`-p control.safe_speed_limit_mps:=0.5` nie zastosował limitów: bezpośredni GetParameters
+zwrócił **2.0 / 2.0**. Zatrzymano ten proces przed próbą. Nie ustalono jeszcze przyczyny
+pierwszeństwa parametrów; przyszłe uruchomienia wymagają odczytu wartości aktywnych.
+Ta instancja nadała pojedynczy stop `disabled`, lecz nie pokazała obsługi aktywnej blokady.
+
+Kolejny start używa kopii pełnego YAML w `/tmp/sac_stand_trial_05.yaml`, z obydwoma
+limitami ustawionymi na **0.5**. Dla samego procesu AI zastosowano osobny tymczasowy
+profil UDP z jawnymi peerami loopback 7410–7472. Wrapper importuje zainstalowany
+`SACDriverNode` bez zmian logiki sterowania i co 2 sekundy raportuje jego stan.
+Potwierdzono wewnątrz węzła: model załadowany, świeże scan/odom, `enabled=false`,
+`lock=true`, efektywny limit **0.5**. Osobny GetParameters potwierdził oba limity,
+`safe_mode=true`, `enable_on_start=false`, watchdog **0.5 s**, offset **-90**, direction
+**-1**, speed sign **-1**, steer sign **+1**. Główny YAML i Bringup nie zostały zmienione.
+To obejście transportu na potrzeby próby, a nie ustalona diagnoza problemu DDS.
+
+Recorder subskrybuje `/joy`, `/autonomy_lock`, `/drive`, `/ackermann_cmd`,
+`/teleop_gated`, `/commands/motor/speed`, `/commands/servo/position`, `/sensors/core`,
+`/odom` i `/scan`. Zapis: `log/stand_trial_20260923_152504.jsonl` (ignorowany przez git).
+Przed próbą: około 11.3 V, fault 0, 0 ERPM, telemetry/odom około 50 Hz, scan 10 Hz.
+Poproszono o RB przez około sekundę i puszczenie, przy puszczonym LB, oraz obserwację
+fizycznego kierunku kół i zatrzymania. Wynik próby jest jeszcze niepotwierdzony.
+
+### Wynik pierwszego RB: 15:27:36.762–15:27:40.830
+
+Wojtek potwierdził fizyczne ruszanie kół do przodu i zatrzymanie po puszczeniu RB.
+Odebrana blokada była zdjęta przez **4.068 s**. Zapis zawiera 168 komend AI i tyle samo
+komend wyjściowych muxa: prędkość **-0.005…-0.5 m/s**, silnik **-9.25…-925 ERPM**.
+VESC przez cały przedział raportował fault **0**. Odometria miała dodatni znak przy
+ujemnym ERPM, zgodnie z potwierdzonym ruchem naprzód na tym aucie.
+
+Od odbioru `/autonomy_lock=true` do pierwszej komendy zerowej minęło:
+
+| Temat | Różnica czasów odbioru |
+|---|---:|
+| `/ackermann_cmd` | 2.70 ms |
+| `/commands/motor/speed` | 3.23 ms |
+| `/drive` | 12.95 ms |
+| pierwsze `/sensors/core` z ERPM=0 | 350.95 ms |
+
+To czasy odbioru u subskrybenta, nie bezpośredni pomiar opóźnienia od fizycznego przycisku.
+Po pierwszym ERPM=0 wystąpiły jeszcze małe odczyty i krótkie odchylenie do -249 ERPM;
+pełnego zatrzymania mechanicznego nie wyznaczamy z pojedynczej próbki zerowej.
+Szczyt podczas rozpędzania wyniósł **-1412 ERPM**, czyli **0.763 m/s** w odometrii.
+Limit 0.5 ograniczył komendy; nie ograniczył tego chwilowego przekroczenia prędkości
+nieobciążonych kół. Nie zmieniano konfiguracji regulatora VESC.
+
+Skręt obejmował **-0.346…+0.328 rad** i wielokrotnie zmieniał znak przy stojącym aucie.
+Średnia częstość komend około **41 Hz**, mediana odstępu **15.6 ms**, maksimum **207 ms**.
+Przyczyna długich odstępów i zmiennego skrętu wymaga pomiaru; nie przypisujemy jej jeszcze
+samemu modelowi, CPU ani DDS. Poproszono o box z przodu po lewej i zapis świeżego skanu.
+Test start/stop jest zaliczony; omijanie przeszkody i jazda po ziemi pozostają niezweryfikowane.
+
+## Próby skrętu, poprawka wznowienia i liczby wątków CPU
+
+Nowe skany przy puszczonym RB: box z przodu po lewej **+53.8° / 0.47 m** (ray 72),
+box z przodu po prawej **-58.3° / 0.49 m** (ray 296). Pełne skany i konwersje w
+`log/stand_cardboard_20260923.jsonl`. Wojtek potwierdził, że przy lewym boxie przednie
+koła skręciły w prawo. Komendy miały głównie ujemny skręt, więc ten test potwierdza
+fizyczny znak tej strony sterowania bez zmiany gainu/offsetu serwa.
+
+### Wznowienie po RB
+
+Dwie kolejne próby zaczynały od razu od -0.5 m/s i niemal pełnego skrętu. W kodzie
+`_last_control_time` pochodził z poprzedniego aktywnego ticka. Pierwszy nowy tick liczył
+`dt` obejmujące cały postój. Reset mappera nie usuwał tego odstępu. Zmieniono:
+
+- `_publish_stop`: czyści czas ostatniego ticka także przed deduplikacją stopu;
+- `_on_timer`: przy `_needs_reset` używa domyślnego dt zamiast czasu od poprzedniej sesji.
+
+Cztery regresje nie tworzą węzła ROS ani publishera: callback jest wywoływany na obiekcie
+z atrapami zegara, wejść i publishera. Sprawdzają wznowienie po 170 s, normalny tick,
+czyszczenie czasu na stopie i stop deduplikowany. Zmieniony proces zbudowano i uruchomiono
+ponownie z limitem 0.5. Pierwsze komendy kolejnych prób wynosiły **-0.005 m/s**.
+
+### Liczba wątków
+
+Przy wyłączonym AI odtworzono ten sam zapisany lewy skan i ten sam stan początkowy;
+po 5 rozgrzewkach wykonano 40 decyzji dla każdej liczby wątków:
+
+| Wątki PyTorch intra-op | Mediana | p95 | Maksimum |
+|---|---:|---:|---:|
+| 6 (poprzedni domyślny stan) | 53.36 ms | 141.16 ms | 160.79 ms |
+| 1 | 4.24 ms | 7.20 ms | 21.70 ms |
+| 2 | 4.22 ms | 49.55 ms | 129.78 ms |
+
+Akcje zgadzały się z dokładnością około 4e-7. Dodano `model.cpu_threads: 1`, przekazywane
+do `InferenceEngine`; pula jest ustawiana przed wczytaniem modelu. Dwie regresje sprawdzają
+ustawienie i odrzucenie niepoprawnej liczby. Łącznie **22/22 testy OK**, build `sac_driver` OK.
+Weryfikacja aktywnych parametrów: threads 1, limity 0.5/0.5, safe mode true, watchdog 0.5 s.
+
+88 zapisanych decyzji live po zmianie: mediana **4.84 ms**, p95 **10.50 ms**, maksimum
+**16.13 ms**. Częstość komend wzrosła do około 59–60 Hz. Pojedyncze dłuższe odstępy odbioru
+wciąż występowały, więc nie jest to gwarancja braku jittera całego toru.
+
+### Prawy box i dalsza diagnostyka
+
+Wojtek opisał początek w prawo lub prosto, z przejściem w lewo po około 300 ms.
+Nie uznano tego za powtarzalnie zaliczony test omijania. Przy puszczonym RB i ERPM=0
+zatrzymano AI (PID 81488). Bringup i pasywne monitory pozostały uruchomione.
+
+Odtworzenie konkretnych zapisanych skanów z zerowymi wejściami ruchu daje pierwszą akcję
+skrętu **-0.7645** dla lewego i **+0.8613** dla prawego boxa. Pierwsze akcje live dla
+prawego boxa różniły się nawet przy speed=0, servo=0.5, accel=0 i yaw=0. Poproszono o
+nieruchomą scenę z odsuniętym obserwatorem, żeby zapisać kolejne skany i zbadać same
+pierwsze decyzje modelu bez publikowania ruchu. Źródło zmienności nie jest jeszcze ustalone.
+
+## Nieruchoma scena: 150 skanów i analiza zanikających odczytów, 15:40
+
+Po osobnym potwierdzeniu Wojtka (box po prawej, obserwator odsunięty) zapisano 150 skanów
+w 15.1 s. Każdy był podawany do modelu jako nowy stan początkowy: cztery kopie jednej
+obserwacji, speed=0, servo=0.5, accel=0, yaw=0. Węzeł diagnostyczny miał tylko subskrypcję
+`/scan`; nie sterował pojazdem. Wyniki oraz wszystkie 450-elementowe wejścia zapisano
+lokalnie w `log/stationary_policy_probe_20260923.json`.
+
+Pierwsza akcja skrętu obejmowała **-0.99999…+0.99130**. Przy progu ±0.05: **65 w prawo,
+8 blisko zera, 77 w lewo**. Ten sam zamrożony skan odtworzony 30 razy dawał dokładnie
+identyczną akcję -0.2914221. Zmienność jest więc odtwarzalna od zmiany wejściowych skanów,
+bez zmiany odometrii, pada, stanu silnika czy losowania akcji.
+
+Raw skany miały **28–62** wartości niepoprawne lub poza zakresem. Po konwersji **37–86**
+promieni modelu wskazywało maksymalne 20 m, z czego **28–76** w przedniej półsferze.
+Na kierunkach boxa, indeksy 296 i 297 (raw -58° i -58.5°), odległość około **0.485 m**
+przełączała się na **20 m w 18% skanów**. Inne niestabilne promienie, np. raw -36°,
+przełączały się z około 0.739 m do 20 m w 28% skanów.
+
+W obecnym konwerterze interpolacja z niefinitywnym sąsiadem też może dać niefinitywny
+wynik, który zostaje zastąpiony max range. Ten pomiar nie rozdziela jeszcze wpływu
+fizycznego zaniku zwrotów od wzmocnienia jego efektu przez interpolację.
+
+Wyłącznie offline wykonano następujące przekształcenia tych samych 150 wejść:
+
+| Wariant wejścia | W prawo | Prawie prosto | W lewo, od boxa |
+|---|---:|---:|---:|
+| oryginał | 65 | 8 | 77 |
+| mediana per promień z maks. 3 ostatnich skanów | 16 | 1 | 133 |
+| mediana per promień z maks. 5 ostatnich skanów | 2 | 0 | 148 |
+| max range zastąpiony medianą poprawnych odczytów z całego zapisu | 0 | 0 | 150 |
+
+Ostatni wariant korzysta z przyszłych próbek i służy **tylko do diagnozy**, nie jest
+implementacją filtra online. Pierwsze próbki median czasowych miały krótszą historię.
+Wyniki w `log/stationary_policy_counterfactual_20260923.json` wskazują, że zaniki do max
+range mają duży udział w zmianach decyzji w tej scenie. Nie wdrożono żadnego wygładzania:
+należy sprawdzić zachowanie przy pojawieniu/zniknięciu przeszkody i opóźnienie reakcji
+przed kolejną próbą na aucie. Samo poprawienie statystyki nieruchomego boxa nie waliduje
+jazdy. Nie zmieniano znaków sterowania ani geometrii lidaru.
+
+Stan końcowy tej serii: AI wyłączone; Bringup 67623 i jeden driver VESC 67703 działają;
+lock true, ERPM 0, fault 0, około 11.2 V. Pasywne monitory USB i zdrowia ROS działają.
+Zamknięto szczegółowy recorder prób; zapisane pliki `*_latest.json` są odtąd historyczne.
+Git zawiera poprawki czasu wznowienia, liczby wątków CPU, testy i dokumentację; dane surowe
+pozostają w ignorowanym `log/`. Domyślne limity YAML to nadal 2.0 m/s — 0.5 m/s obowiązywało
+wyłącznie w tymczasowej konfiguracji prób. Główna gałąź nie jest scalana automatycznie.

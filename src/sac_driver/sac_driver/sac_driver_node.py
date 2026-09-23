@@ -119,6 +119,7 @@ class SACDriverNode(Node):
         model_path = self._param("model.path", "")
         model_device = self._param("model.device", "cpu")
         model_weights_only = bool(self._param("model.weights_only", False))
+        model_cpu_threads = int(self._param("model.cpu_threads", 1))
 
         lidar_angles = self._param(
             "lidar.angles_deg",
@@ -218,6 +219,7 @@ class SACDriverNode(Node):
                         self._model_path,
                         device=model_device,
                         weights_only=model_weights_only,
+                        cpu_threads=model_cpu_threads,
                     )
                 except Exception as exc:  # pylint: disable=broad-except
                     self.get_logger().error(f"Failed to load model from {self._model_path}: {exc}")
@@ -349,6 +351,9 @@ class SACDriverNode(Node):
         return True
 
     def _publish_stop(self, now, reason: str) -> None:
+        # Time spent stopped must not become an acceleration/steering step on
+        # resume, including stops deduplicated by _last_stop_sent.
+        self._last_control_time = None
         if self._last_stop_sent:
             return
         msg = AckermannDriveStamped()
@@ -389,7 +394,7 @@ class SACDriverNode(Node):
             self._publish_stop(now, "data_missing")
             return
 
-        if self._last_control_time is None:
+        if self._needs_reset or self._last_control_time is None:
             dt = None
         else:
             dt = (now - self._last_control_time).nanoseconds * 1e-9

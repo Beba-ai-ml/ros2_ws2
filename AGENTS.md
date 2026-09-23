@@ -30,9 +30,15 @@ working inside this repository.
     near 0 degrees, left positive, right negative. Python fallbacks now match YAML and all
     16 offline parity tests pass. Read `.context/RESEARCH-jetson-20260923.md` for evidence;
     do not restore the old +90 offset or TF yaw pi from a remembered housing orientation.
-    Physical steering response and driving remain untested. The user prohibited enabling
-    autonomy in this session, but confirmed wheels off the ground and authorized Bringup.
-    Leave AI off; use subscriptions and parameter reads for further diagnostics.
+    The user subsequently confirmed wheels off the ground again and authorized stand tests
+    at a temporary **0.5 m/s** AI limit with the user's RB deadman. Forward motion, RB stop,
+    and left-box -> right steering were confirmed. Initial right-box response was mixed;
+    AI was stopped; a passive probe reproduced scan-dependent steering changes, with
+    intermittent nearby lidar returns mapped to 20 m. No filtering is deployed yet.
+    Resume timing was fixed and
+    `model.cpu_threads=1` reduced inference latency. This authorization covers stand testing,
+    not driving on the ground. Keep the deadman/watchdog and read the latest
+    `.context/STATE.md` before starting anything; bringup/AI may already run outside the panel.
 
 ## Repo map — edit here / do not edit
 

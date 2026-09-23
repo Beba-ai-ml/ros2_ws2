@@ -142,7 +142,9 @@ it to land in the share dir.
 - **`sac_driver_node.py`** — Main ROS2 node. Subscribes to /scan, /odom, /autonomy_lock. Runs a 60 Hz tick loop with the policy every 8th tick. Computes linear_accel from odom speed delta. Builds state, runs inference, publishes /drive. Resolves `model.path`. Has debug logging for data readiness and autonomy state transitions.
 - **`state_builder.py`** — Builds 455-element observation frames (450 lidar + 5 state channels), maintains 4-frame sliding deque. Normalizes all inputs. Returns concatenated 1820-float state vector.
 - **`lidar_converter.py`** — Extracts 450 angles from LaserScan using `build_lidar_angles()` with variable step (0.5° front, 2.0° rear). Applies `lidar.angle_offset_deg` with wrapping to [-pi, pi). Returns normalized [0,1] distances.
-- **`inference_engine.py`** — Wraps GaussianPolicy. Takes 1820-float state, returns (steer, accel). ~5-6 ms on the Jetson CPU. Generic, no hardcoded dimensions.
+- **`inference_engine.py`** — Wraps GaussianPolicy. Takes 1820-float state, returns (steer, accel).
+  `model.cpu_threads=1` bounds the PyTorch intra-op pool. On 2026-09-23 the same captured
+  state gave median 4.2 ms with one thread versus 53.4 ms with six. Generic dimensions.
 - **`policy_loader.py`** — Loads .pth checkpoint, auto-detects state_dim/action_dim/hidden_sizes from weight shapes. Handles `torch.compile` `_orig_mod.` prefix stripping. Includes `numpy._core` compatibility alias for PC→Jetson checkpoint loading.
 - **`control_mapper.py`** — Maps NN output [-1,1] to Ackermann commands. Rate limiting, speed limiting, safe mode scaling, wheelbase-aware yaw rate. `speed_sign` / `steer_sign` flip directions.
 
@@ -186,7 +188,8 @@ it to land in the share dir.
 - **Board:** NVIDIA Jetson Orin Nano Super Developer Kit (aarch64), JetPack 5.1.5 / L4T R35.6.1, Ubuntu 20.04.6, 25 W power mode
 - **ROS2:** Foxy from apt (EOL but functional)
 - **Python:** 3.8.10, PyTorch 1.13.1 (CPU wheel from PyPI, pip `--user`), numpy 1.24.4
-- CUDA 11.4 is installed but **inference is CPU-only** (~5-6 ms/decision, 60 Hz tick budget is 16 ms)
+- CUDA 11.4 is installed but **inference is CPU-only**; one intra-op thread is the default.
+  Measure timing under live ROS load; six threads caused large latency tails in the stand trial.
 - **Hardware:** SLAMTEC RPLiDAR S1 (256000 baud), VESC 6 (HW60, FW 6.02), Logitech F710 gamepad, 7x WS2812B on SPI1, optional GPIO shutdown button
 - **Panel:** GTK3 Python app in `ros2_panel/`
 - **Install:** `./install.sh` (see README/docs/SETUP_NEW_JETSON.md); Python deps in `requirements.txt`
@@ -329,14 +332,19 @@ KEEP_BRINGUP=1 ~/ros2_ws/scripts/key_drive.sh   # leave bringup running
 - `_publish_stop()` has a `_last_stop_sent` guard that suppresses repeated stop logs, which makes
   state transitions invisible. Debug logging was added: `_on_estop` logs "Autonomy
   ENABLED/DISABLED", `_on_timer` logs "Waiting for data: scan=X odom=Y".
+- Stops clear `_last_control_time`, including deduplicated stops. Episode reset also uses
+  the configured default dt. This prevents time with RB released from becoming one large
+  acceleration/steering step on the next press (observed and fixed on 2026-09-23).
 
 ### Speed/Steer Sign
 - `control.speed_sign` and `control.steer_sign` flip the NN output direction.
 - **On this car a positive `AckermannDrive.speed` = REVERSE.** Hence `speed_sign = -1.0` in
   `driver_params.yaml` and `SPEED_SIGN = -1.0` in `scripts/key_drive.py` — they must agree.
 - **Current YAML:** `speed_sign=-1.0`, `steer_sign=+1.0`, `angle_offset_deg=-90.0`,
-  `angle_direction=-1.0`; lidar values also confirmed live. Physical steering validation
-  remains pending; TF and fallback corrections are documented in the research report.
+  `angle_direction=-1.0`; lidar values also confirmed live. The stand trial confirmed
+  forward motion, RB stop and steering away from the left-front box. Right-front response
+  was inconsistent; a passive probe reproduced this from scan/max-range variation.
+  No filter is deployed; see the 2026-09-23 report before attempting ground driving.
 - **Old 27-ray model (`driver_params_27ray.yaml`):** `steer_sign=-1.0`, `angle_offset_deg=-90.0`,
   `angle_direction=+1.0` — a mirrored but self-consistent pair. That profile is NOT loadable by
   the current node any more (different state layout).

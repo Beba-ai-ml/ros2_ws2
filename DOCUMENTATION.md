@@ -107,8 +107,8 @@ Builds the 1820-float state vector from sensor data.
 | Element | Description |
 |---------|-------------|
 | `class InferenceEngine` | Wraps a GaussianPolicy model |
-| `__init__(model, device)` | Takes a loaded PyTorch model |
-| `get_action(state_vector)` | Input: 1820 floats. Output: (steer, accel) tuple. Steer in [-1,1], accel in [0,2]. Runs `torch.no_grad()`. ~5ms on Jetson CPU. |
+| `__init__(policy_path, device, cpu_threads=1, ...)` | Loads a checkpoint and sets the process's PyTorch intra-op CPU thread count before inference. Positive thread count required. |
+| `get_action(state_vector)` | Input: 1820 floats. Output: (steer, accel) tuple. Steer in [-1,1], accel in [0,2]. Runs `torch.no_grad()`. Measured median 4.2 ms with one CPU thread in the 2026-09-23 stand benchmark; latency varies. |
 
 ---
 
@@ -149,6 +149,7 @@ Builds the 1820-float state vector from sensor data.
 | `model.path` | string | `"weights/session_Sesja_mpo2_2_policy.pth"` | Checkpoint path (policy-only state_dict or full `sac_checkpoint_v1`). Relative paths resolve against the package share dir (`install/sac_driver/share/sac_driver/`), falling back to the source tree. Absolute, `~/...` and `package://sac_driver/...` also work. |
 | `model.device` | string | `"cpu"` | PyTorch device |
 | `model.weights_only` | bool | `false` | torch.load weights_only flag |
+| `model.cpu_threads` | int | `1` | PyTorch intra-op threads. The Jetson stand benchmark showed much larger tail latency with 6 threads. Applies at node startup. |
 | `lidar.front_step_deg` | float | `0.5` | Front hemisphere angular step (0 = use angles_deg list) |
 | `lidar.rear_step_deg` | float | `2.0` | Rear hemisphere angular step (0 = use angles_deg list) |
 | `lidar.angles_deg` | float[] | 27 angles | Explicit target angles (overridden when front/rear step > 0) |

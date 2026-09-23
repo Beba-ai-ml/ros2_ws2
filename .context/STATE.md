@@ -1,5 +1,112 @@
 # SAC Driver - Current State
 
+## 2026-09-23 15:40 - stationary probe isolates scan-driven steering instability
+
+With the user confirming a stationary right-front box and stepping away, collected 150
+scans over 15.1 s. Each scan was independently evaluated with a fresh four-frame stack
+and zero motion inputs. No drive/servo commands were published by this probe.
+
+| Offline input variant | Right / near zero / left decisions |
+|---|---|
+| Original 150 scans | 65 / 8 / 77 |
+| Per-ray median of up to 3 latest scans | 16 / 1 / 133 |
+| Per-ray median of up to 5 latest scans | 2 / 0 / 148 |
+| Replace max-range values using valid-ray medians from the whole recording | 0 / 0 / 150 |
+
+Repeating exactly one frozen input 30 times gave exactly the same output. Model rays 296
+and 297 saw about 0.485 m but became 20 m in 18% of scans. Original messages had 28–62
+invalid/out-of-range raw rays; after conversion 37–86 model rays were at max range.
+The last table row uses future samples and is a counterfactual diagnostic, not a usable
+live filter. No filtering was deployed. Five-scan temporal filtering needs a separate
+latency/obstacle-change evaluation before use. Do not change lidar/steer signs to hide
+this scan-dependent variation.
+
+Raw and replay evidence remains ignored under `log/stationary_policy_probe_20260923.json`
+and `log/stationary_policy_counterfactual_20260923.json`. See the full research report.
+Current hardware state: **AI off**, Bringup PID **67623**, single VESC driver **67703**,
+lock true, ERPM 0, fault 0, about 11.2 V. USB/ROS health monitors remain running. The
+detailed stand recorder was stopped after the trials; its latest JSON snapshots are
+historical once stopped. Source/installed default speed limits are still 2.0 m/s;
+the 0.5 m/s limits were temporary trial settings, not the panel's default configuration.
+
+## 2026-09-23 15:37 - resume/CPU fixes tested; AI stopped after mixed right-box response
+
+The user confirmed left-front box -> physical right steering. For a right-front box the
+user reported an inconsistent initial response (right/straight), followed by left steering
+after about 300 ms. Do not treat this as a passed repeatable avoidance test or permission
+for ground driving. AI was stopped with RB released and ERPM 0; Bringup remains running.
+
+Two issues found and fixed during the stand tests:
+
+- `_last_control_time` survived RB release, so a later press integrated the entire pause
+  and jumped straight to the speed/steering limits. Stops now clear the timestamp; episode
+  reset uses the configured default dt. After rebuilding, the first command in repeat
+  trials was approximately **-0.005 m/s**, versus **-0.5 m/s** before the fix.
+- New startup parameter **`model.cpu_threads: 1`** sets the PyTorch intra-op pool. On the
+  same captured state, 40 timed calls per setting gave median/p95 **53.36/141.16 ms**
+  with six threads, **4.24/7.20 ms** with one, **4.22/49.55 ms** with two. Recorded live
+  after the change: 88 decisions, median **4.84 ms**, p95 **10.50 ms**, max **16.13 ms**.
+  Command rate rose from about 41–47 Hz to about 59–60 Hz; some receipt gaps remained.
+
+**22 tests passed** (16 parity, 4 control timing, 2 thread configuration); `sac_driver`
+built successfully. Source/installed default speed limits remain 2.0; stand AI used a
+temporary 0.5/0.5 YAML, verified via GetParameters along with cpu_threads=1.
+No VESC calibration, lidar mapping, control signs, deadman or watchdog was weakened.
+
+Fresh captures: front-left raw **+53.8° / 0.47 m**, front-right **-58.3° / 0.49 m** in
+`log/stand_cardboard_20260923.jsonl`. Offline reset-state replay of those specific scans
+returns steer **-0.765** for left box and **+0.861** for right box. Live right-box initial
+actions differed even with zero speed/accel/yaw, so a stationary scan-to-policy probe is
+being prepared to separate scene/scan variation from vehicle feedback. It publishes no
+drive commands. Do not infer a calibration sign error from the mixed initial response.
+
+## 2026-09-23 15:28 - first RB trial: forward motion and stop confirmed
+
+The user reported that wheels spun forward and stopped on RB release. Recorded unlocked
+window 15:27:36.762–15:27:40.830 (4.068 s): AI and mux speed commands stayed within
+[-0.5, 0] m/s, motor command within [-925, 0] ERPM, VESC fault 0 throughout.
+From the received lock=true message, zero reached the recorded mux output in 2.70 ms,
+motor command in 3.23 ms, and AI command in 12.95 ms. These are subscriber receipt
+intervals, not a measurement of physical button-to-stop latency. First ERPM zero was
+350.95 ms later; feedback had residual excursions before settling, so this first zero
+is not a claim of full mechanical settling.
+
+Remaining findings: unloaded motor ERPM reached -1412 (odom 0.763 m/s equivalent),
+despite the command cap; a command limit does not cap transient measured wheel speed.
+AI steering changed sign, spanning -0.346 to +0.328 rad. There were 168 commands in
+4.068 s (about 41 Hz); largest observed inter-command gap was 207 ms. Steering avoidance
+and timing still need investigation before ground driving. No calibration was changed.
+Asked the user to position a box front-left at about 45 degrees while keeping RB released.
+
+## 2026-09-23 15:26 - stand trial prepared, awaiting the user's RB pulse
+
+The user explicitly reconfirmed raised wheels and authorized testing. AI is now running
+outside the panel with the unchanged installed control code, temporary YAML limits
+`control.speed_limit_mps=0.5` and `control.safe_speed_limit_mps=0.5`, safe mode true,
+enable-on-start false, watchdog 0.5 s and the normal RB/LB lock. Do not launch another
+Bringup or AI from the panel. The source YAML remains at 2.0 m/s.
+
+- First launch with YAML plus unscoped CLI `-p` overrides still reported limits 2.0.
+  Stopped that AI before any RB pulse; do not assume command-line overrides took effect.
+- The first AI emitted one disabled stop and did not show incoming lock callbacks.
+  Relaunched only AI using a temporary UDP-only profile with explicit loopback discovery
+  peers. The new instance has fresh scan/odom, model loaded, lock true and effective
+  limit 0.5. A separate GetParameters request confirmed both limits and safety settings.
+  The transport workaround is scoped to this trial; the underlying DDS cause is unresolved.
+- Runtime files: `/tmp/sac_stand_trial_05.yaml`, `/tmp/sac_stand_trial_udp.xml`,
+  `/tmp/sac_stand_trial_node.py` (imports the installed node, adds passive status reporting).
+  Bringup remains PID 67623; VESC driver 67703. No serial port was opened by diagnostics.
+- Passive command recorder: `/tmp/stand_trial_watch.py`, raw data in
+  `log/stand_trial_20260923_152504.jsonl`; latest summaries in `log/stand_trial_latest.json`
+  and `log/stand_trial_ai_latest.json`. Records joy, lock, AI/mux/motor/servo commands,
+  VESC feedback, odometry and scan minimum. Check timestamps before relying on snapshots.
+- Pre-trial: VESC fault 0, 11.3 V, 0 ERPM; scan about 10 Hz, odom/telemetry about 50 Hz.
+  Asked for a one-second RB press/release with LB released and visual direction/stop feedback.
+  Physical results are pending. This is authorization for stand testing, not ground driving.
+
+`tools/read_sac_parameters.py` now also reports both speed limits, safe mode, control signs
+and watchdog timeout so future readbacks cannot omit the trial's safety settings.
+
 ## 2026-09-23 15:13 - measured lidar frame corrected and verified live
 
 Fresh, user-confirmed captures with AI off: front raw **+4.26° / 0.316 m**, left raw

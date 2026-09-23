@@ -9,8 +9,10 @@ import time
 
 
 PARAMETERS = [
-    "lidar.angle_offset_deg", "lidar.angle_direction", "model.path",
+    "lidar.angle_offset_deg", "lidar.angle_direction", "model.path", "model.cpu_threads",
     "control.enable_on_start", "control.rate_hz", "control.decision_every_n",
+    "control.speed_limit_mps", "control.safe_speed_limit_mps", "control.safe_mode",
+    "control.speed_sign", "control.steer_sign", "safety.watchdog_timeout_sec",
     "topics.scan", "topics.odom", "topics.emergency_stop",
 ]
 
