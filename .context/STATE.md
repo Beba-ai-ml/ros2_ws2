@@ -1,5 +1,14 @@
 # SAC Driver - Current State
 
+## 2026-09-28 - archived E-small A/B full training checkpoints
+
+Stored the pre-resume full SAC checkpoints at
+`src/sac_driver/weights/mapper_E_small_20260928_model_A_full_checkpoint_before_resume.pth`
+and `src/sac_driver/weights/mapper_E_small_20260928_model_B_full_checkpoint_before_resume.pth`.
+Both files were copied from the PC run `E_small_20260927`; source and copy SHA-256 values matched.
+These are archival snapshots. No source code or runtime model selection was changed, and the
+ROS package was not rebuilt to install them into its share directory.
+
 ## 2026-09-23 16:01 - FINAL: save/push only; later AI request withdrawn
 
 Read **[HANDOFF-20260923-autonomia-jutro.md](HANDOFF-20260923-autonomia-jutro.md)** next.
