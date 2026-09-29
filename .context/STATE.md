@@ -1,5 +1,18 @@
 # SAC Driver - Current State
 
+## 2026-09-29 - E-small model B_2 added
+
+Added the final `E_small_B_20260927` full training checkpoint and a policy-only export as
+`src/sac_driver/weights/mapper_E_small_20260929_model_B_2_full_checkpoint.pth` and
+`src/sac_driver/weights/mapper_E_small_20260929_model_B_2_policy.pth`. The checkpoint metadata
+reports 32,286 episodes and 5,930,251 steps; the source checkpoint was last written at 08:21 CEST.
+The archived full checkpoint SHA-256 matches the training source. The policy export uses legacy
+PyTorch serialization and loaded through `policy_loader.py` with state dim 1820, action dim 2,
+and hidden sizes [512, 512, 256].
+
+Model B_2 is an additional candidate. The active `model.path` was not changed; no ROS build or
+physical vehicle run was performed.
+
 ## 2026-09-28 - archived E-small A/B full training checkpoints
 
 Stored the pre-resume full SAC checkpoints at

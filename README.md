@@ -292,6 +292,8 @@ the parts that can be checked offline (`python3 test/test_sim_parity.py` inside 
 | Control rate | 60 Hz tick, policy every 8th tick (7.5 Hz, like the simulator) |
 | Active weights | `src/sac_driver/weights/session_Sesja_mpo2_2_policy.pth` (mpo2, peak mean_100 195 m, policy only) |
 | Alternative weights | `src/sac_driver/weights/session_car_1_2_policy.pth` (R_01, peak mean_100 220 m) |
+| Candidate weights | `src/sac_driver/weights/mapper_E_small_20260929_model_B_2_policy.pth` (E_small B_2, 32,286 episodes; not the active default) |
+| Full training checkpoint | `src/sac_driver/weights/mapper_E_small_20260929_model_B_2_full_checkpoint.pth` |
 
 Checkpoints are tracked in git and installed into the package share directory by `setup.py`,
 so `model.path` in `driver_params.yaml` is **relative** (`weights/session_Sesja_mpo2_2_policy.pth`)
